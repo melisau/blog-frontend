@@ -111,9 +111,45 @@ export default function BlogDetail() {
   useEffect(() => {
     let cancelled = false
     setCommentsLoading(true)
+
     axiosInstance
       .get(`/blogs/${id}/comments`)
-      .then(({ data }) => { if (!cancelled) setComments(normalizeComments(data)) })
+      .then(async ({ data }) => {
+        if (cancelled) return
+        const normalized = normalizeComments(data)
+
+        // Collect unique author IDs whose username is still missing
+        const missingIds = [
+          ...new Set(
+            normalized
+              .filter((c) => !c.author.username && c.author.id != null)
+              .map((c) => c.author.id)
+          ),
+        ]
+
+        if (missingIds.length > 0) {
+          const userMap = {}
+          await Promise.allSettled(
+            missingIds.map((uid) =>
+              axiosInstance.get(`/users/${uid}`).then(({ data: u }) => {
+                userMap[uid] = {
+                  username: u.username ?? u.name ?? u.full_name ?? null,
+                  iconId:   u.icon_id ?? u.iconId ?? null,
+                }
+              })
+            )
+          )
+          // Patch missing usernames into the normalized list
+          for (const c of normalized) {
+            if (!c.author.username && c.author.id != null && userMap[c.author.id]) {
+              c.author.username = userMap[c.author.id].username
+              if (!c.author.iconId) c.author.iconId = userMap[c.author.id].iconId
+            }
+          }
+        }
+
+        if (!cancelled) setComments(normalized)
+      })
       .catch(() => { /* silent fail */ })
       .finally(() => { if (!cancelled) setCommentsLoading(false) })
 
