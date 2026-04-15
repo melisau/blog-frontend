@@ -42,12 +42,26 @@ function normalizeBlog(raw) {
   }
 }
 
-function extractPage(data, page, limit) {
+function extractPage(data, page, limit, category, tag) {
   if (Array.isArray(data)) {
+    let filtered = data
+    if (category) {
+      filtered = filtered.filter((b) => {
+        const cat = typeof b.category === 'string' ? b.category : (b.category?.name ?? null)
+        return cat === category
+      })
+    }
+    if (tag) {
+      filtered = filtered.filter((b) => {
+        const tags = extractTags(b)
+        return tags.includes(tag)
+      })
+    }
+
     const start = (page - 1) * limit
     return {
-      blogs:      data.slice(start, start + limit).map(normalizeBlog),
-      totalPages: Math.max(1, Math.ceil(data.length / limit)),
+      blogs:      filtered.slice(start, start + limit).map(normalizeBlog),
+      totalPages: Math.max(1, Math.ceil(filtered.length / limit)),
     }
   }
 
@@ -90,7 +104,7 @@ export default function Home() {
       .get('/blogs', { params })
       .then(async ({ data }) => {
         if (cancelled) return
-        const { blogs: list, totalPages: pages } = extractPage(data, page, POSTS_PER_PAGE)
+        const { blogs: list, totalPages: pages } = extractPage(data, page, POSTS_PER_PAGE, activeCategory, activeTag)
         
         // Resolve author names for blogs that don't have them
         const missingUids = [...new Set(list.filter((b) => !b.author && b.authorId).map((b) => b.authorId))]
@@ -126,12 +140,6 @@ export default function Home() {
         title={activeCategory ? `${activeCategory} Kategorisi` : activeTag ? `#${activeTag} Etiketi` : 'Ana Sayfa'}
         description="En son yazıları keşfedin ve topluluğumuza katılın."
       />
-      {/* ── Header ── */}
-      <header className="page-header">
-        <h1 className="page-title">Blog</h1>
-        <p className="page-desc">En son yazıları keşfedin</p>
-      </header>
-
       {/* ── Filter Status ── */}
       {(activeCategory || activeTag) && (
         <div className="filter-bar">

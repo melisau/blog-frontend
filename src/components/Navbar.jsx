@@ -1,22 +1,50 @@
 // Navbar — global sticky top navigation bar shown on every page.
-// Authenticated:  [Logo]  ···  [Avatar  Kullanıcı adı → /profile/:id]  [Çıkış]
+// Authenticated:  [Logo]  ···  [+]  [Avatar ▾]  (dropdown: profile / email / sign out)
 // Guest:          [Logo]  ···  [Giriş Yap]  [Kayıt Ol]
+import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Avatar from './Avatar'
+
+// Masks an e-mail: first 2 chars + bullets + @domain
+function maskEmail(email) {
+  if (!email) return null
+  const at = email.indexOf('@')
+  if (at < 0) return email
+  const local  = email.slice(0, at)
+  const domain = email.slice(at)
+  const visible = local.slice(0, 2)
+  const dots    = '•'.repeat(Math.max(6, local.length - 2))
+  return `${visible}${dots}${domain}`
+}
 
 export default function Navbar() {
   const { isAuthenticated, user, logout } = useAuth()
   const navigate = useNavigate()
 
-  // Resolve display name from whichever field the backend returned.
-  const displayName =
-    user?.username ?? user?.name ?? user?.full_name ?? null
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef(null)
+
+  const displayName = user?.username ?? user?.name ?? user?.full_name ?? null
+  const maskedEmail = maskEmail(user?.email ?? null)
 
   function handleLogout() {
+    setOpen(false)
     logout()
     navigate('/')
   }
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!open) return
+    function onPointerDown(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [open])
 
   return (
     <header className="navbar">
@@ -51,22 +79,69 @@ export default function Navbar() {
             </svg>
           </Link>
 
-          {/* Avatar + name → profile */}
+          {/* Avatar → dropdown trigger */}
           {user?.id ? (
-            <Link
-              to={`/profile/${user.id}`}
-              className="navbar__profile-link"
-              aria-label={`${displayName ?? 'Kullanıcı'} profili`}
-            >
-              <Avatar
-                userId={user.id}
-                username={displayName ?? '?'}
-                size="sm"
-                iconId={user.icon_id ?? null}
-              />
-            </Link>
+            <div className="navbar__dropdown-wrap" ref={wrapRef}>
+              <button
+                className="navbar__profile-btn"
+                onClick={() => setOpen((o) => !o)}
+                aria-haspopup="true"
+                aria-expanded={open}
+                aria-label={`${displayName ?? 'Kullanıcı'} menüsü`}
+              >
+                <Avatar
+                  userId={user.id}
+                  username={displayName ?? '?'}
+                  size="sm"
+                  iconId={user.icon_id ?? null}
+                />
+                <svg
+                  className={`navbar__chevron${open ? ' navbar__chevron--up' : ''}`}
+                  width="12" height="12" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.5"
+                  strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
+
+              {open && (
+                <div className="navbar__dropdown" role="menu">
+                  {/* User row */}
+                  <div className="navbar__dd-user">
+                    <Avatar
+                      userId={user.id}
+                      username={displayName ?? '?'}
+                      size="sm"
+                      iconId={user.icon_id ?? null}
+                    />
+                    <div className="navbar__dd-info">
+                      <span className="navbar__dd-name">{displayName ?? 'Kullanıcı'}</span>
+                      <Link
+                        to={`/profile/${user.id}`}
+                        className="navbar__dd-profile"
+                        onClick={() => setOpen(false)}
+                      >
+                        View profile
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* Email */}
+                  {maskedEmail && (
+                    <div className="navbar__dd-email">{maskedEmail}</div>
+                  )}
+
+                  <div className="navbar__dd-divider" />
+
+                  {/* Sign out */}
+                  <button className="navbar__dd-signout" onClick={handleLogout}>
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
-            /* id unknown (token-only login) — show avatar without link */
+            /* id unknown — static avatar */
             <span className="navbar__profile-link navbar__profile-link--static">
               <Avatar
                 userId={null}
@@ -76,23 +151,6 @@ export default function Navbar() {
               />
             </span>
           )}
-
-          {/* Logout */}
-          <button
-            className="navbar__logout-btn"
-            onClick={handleLogout}
-            aria-label="Çıkış yap"
-            title="Çıkış Yap"
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2.2"
-              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-              <polyline points="16 17 21 12 16 7"/>
-              <line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
-            <span className="navbar__logout-label">Çıkış</span>
-          </button>
         </div>
       ) : (
         <div className="navbar__auth">

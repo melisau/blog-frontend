@@ -142,7 +142,7 @@ export default function NewBlog() {
 
   return (
     <div className="page-container page-container--narrow">
-      <Link to="/" className="back-link">← Ana Sayfa</Link>
+      <Link to="/" className="back-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg></Link>
 
       <div className="post-form-card">
         <div className="auth-header">
