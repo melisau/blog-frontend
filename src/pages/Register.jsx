@@ -1,11 +1,28 @@
 // Register page — creates a new user account.
 // confirmPassword is validated client-side only; it is intentionally
 // not sent to the API because the server does not need the duplicate field.
+//
+// 422 handling: FastAPI returns { detail: [{ loc, msg }] } for validation
+// errors.  mapDetailToErrors() converts that array into per-field messages
+// so the exact problem is shown next to the relevant input.
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axiosInstance from '../api/axiosInstance';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// mapDetailToErrors — converts a FastAPI 422 detail array into the same
+// { fieldName: message } shape that the client-side validate() uses.
+// loc arrays look like ["body", "email"] — we take the last element as the
+// field name so it maps directly to a state key.
+function mapDetailToErrors(detail) {
+  if (!Array.isArray(detail)) return {};
+  return detail.reduce((acc, item) => {
+    const field = item.loc?.at(-1);
+    if (field && typeof field === 'string') acc[field] = item.msg;
+    return acc;
+  }, {});
+}
 
 // Returns a map of field-name → error message. Empty map means valid.
 function validate(fields) {
@@ -74,9 +91,25 @@ export default function Register() {
       // explicitly signs in after registration.
       navigate('/login');
     } catch (err) {
-      setServerError(
-        err.response?.data?.message || 'Kayıt olunamadı. Lütfen tekrar deneyin.'
-      );
+      const data = err.response?.data;
+
+      // 422: FastAPI returns field-level validation errors.
+      // Map them back onto the form so each input shows its own message.
+      if (err.response?.status === 422 && Array.isArray(data?.detail)) {
+        const fieldErrors = mapDetailToErrors(data.detail);
+        if (Object.keys(fieldErrors).length > 0) {
+          setErrors((prev) => ({ ...prev, ...fieldErrors }));
+        } else {
+          // detail array exists but has no recognised field names
+          setServerError('Girilen veriler geçersiz. Lütfen kontrol edin.');
+        }
+      } else {
+        setServerError(
+          data?.detail ||
+          data?.message ||
+          'Kayıt olunamadı. Lütfen tekrar deneyin.'
+        );
+      }
     } finally {
       setLoading(false);
     }

@@ -1,8 +1,10 @@
 // Login page — handles user authentication.
 // Validates input on the client before hitting the API to avoid
 // unnecessary network requests for obviously invalid data.
+// After a successful login, the user is sent back to the page they originally
+// tried to visit (stored in location.state.from by PrivateRoute), or to /.
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import axiosInstance from '../api/axiosInstance';
 import { useAuth } from '../context/AuthContext';
 
@@ -27,8 +29,13 @@ function validate(fields) {
 }
 
 export default function Login() {
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
+  const location  = useLocation();
   const { login } = useAuth();
+
+  // Redirect target: the page the user tried to visit, or home if they
+  // came directly to /login.
+  const from = location.state?.from || '/';
 
   const [fields, setFields] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
@@ -57,9 +64,25 @@ export default function Login() {
         email: fields.email,
         password: fields.password,
       });
-      // Persist the token via AuthContext, then send the user to the home page.
-      login(data.token);
-      navigate('/');
+
+      // FastAPI returns `access_token`; some backends use `token`.
+      // Accept whichever field is present so the app works with both.
+      const token = data.access_token ?? data.token ?? null;
+
+      if (!token) {
+        // Response arrived but no token field found — likely a schema mismatch.
+        // Log the response so it is easy to spot in DevTools.
+        console.error('[Login] Beklenmeyen API yanıtı:', data);
+        setServerError('Sunucu yanıtı beklenmeyen formatta. Lütfen yöneticiyle iletişime geçin.');
+        return;
+      }
+
+      // user object is optional — some APIs only return the token on login.
+      login({ user: data.user ?? null, token });
+
+      // replace: true prevents the login page from appearing in history,
+      // so the back button goes to the page before the auth flow.
+      navigate(from, { replace: true });
     } catch (err) {
       setServerError(
         err.response?.data?.message || 'Giriş yapılamadı. Lütfen tekrar deneyin.'

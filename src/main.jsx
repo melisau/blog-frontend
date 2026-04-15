@@ -1,20 +1,17 @@
 // Entry point — mounts the React app into the DOM.
-// Provider order matters: BrowserRouter must wrap everything that uses
-// React Router hooks, and AuthProvider must wrap everything that calls
-// useAuth(), including the route guards inside App.
+// BrowserRouter must wrap everything that uses React Router hooks.
+// AuthProvider is no longer required because auth state is managed by
+// Zustand, which does not need a React context Provider.
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
-import { AuthProvider } from './context/AuthContext.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
+      <App />
     </BrowserRouter>
   </StrictMode>,
 )
