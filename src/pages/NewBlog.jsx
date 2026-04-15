@@ -32,7 +32,7 @@ function validate(fields) {
 export default function NewBlog() {
   const navigate = useNavigate()
 
-  const [fields, setFields] = useState({ title: '', category: '', content: '' })
+  const [fields, setFields] = useState({ title: '', category: '', content: '', image_url: '' })
   const [tags, setTags]         = useState([])
   const [tagInput, setTagInput] = useState('')
   const [tagError, setTagError] = useState('')
@@ -124,9 +124,10 @@ export default function NewBlog() {
     try {
       // JWT is attached automatically by the Axios request interceptor.
       const { data } = await axiosInstance.post('/blogs', {
-        title:    fields.title,
-        category: fields.category,
-        content:  fields.content,
+        title:     fields.title,
+        category:  fields.category,
+        content:   fields.content,
+        image_url: fields.image_url,
         tags,
       })
       navigate(`/blogs/${data.id}`)
@@ -168,6 +169,23 @@ export default function NewBlog() {
               placeholder="Yazı başlığını girin"
             />
             {errors.title && <p className="field-error">{errors.title}</p>}
+          </div>
+
+          {/* ── Image URL ─────────────────────────────────────────── */}
+          <div className="field-group">
+            <label htmlFor="image_url" className="field-label">
+              Kapak Görseli URL
+              <span className="field-label__optional"> (isteğe bağlı)</span>
+            </label>
+            <input
+              id="image_url"
+              name="image_url"
+              type="url"
+              value={fields.image_url}
+              onChange={handleChange}
+              className="field-input"
+              placeholder="https://example.com/image.jpg"
+            />
           </div>
 
           {/* ── Category ───────────────────────────────────────────── */}

@@ -26,7 +26,7 @@ export default function EditBlog() {
   const { id } = useParams()
   const navigate = useNavigate()
 
-  const [fields, setFields] = useState({ title: '', category: '', content: '' })
+  const [fields, setFields] = useState({ title: '', category: '', content: '', image_url: '' })
   const [errors, setErrors] = useState({})
   const [serverError, setServerError] = useState('')
   const [loading,  setLoading]  = useState(false)
@@ -41,9 +41,10 @@ export default function EditBlog() {
       .get(`/blogs/${id}`)
       .then(({ data }) => {
         setFields({
-          title:    data.title    ?? '',
-          category: data.category ?? data.tag ?? '',
-          content:  data.content  ?? data.body ?? '',
+          title:     data.title     ?? '',
+          category:  data.category  ?? data.tag ?? '',
+          content:   data.content   ?? data.body ?? '',
+          image_url: data.image_url ?? data.imageUrl ?? '',
         })
       })
       .catch(() => setServerError('Yazı yüklenemedi.'))
@@ -80,9 +81,10 @@ export default function EditBlog() {
     setServerError('')
     try {
       await axiosInstance.put(`/blogs/${id}`, {
-        title:    fields.title,
-        category: fields.category,
-        content:  fields.content,
+        title:     fields.title,
+        category:  fields.category,
+        content:   fields.content,
+        image_url: fields.image_url,
       })
       navigate(`/blogs/${id}`)
     } catch (err) {
@@ -135,6 +137,23 @@ export default function EditBlog() {
               placeholder="Yazı başlığını girin"
             />
             {errors.title && <p className="field-error">{errors.title}</p>}
+          </div>
+
+          {/* ── Image URL ─────────────────────────────────────────── */}
+          <div className="field-group">
+            <label htmlFor="image_url" className="field-label">
+              Kapak Görseli URL
+              <span className="field-label__optional"> (isteğe bağlı)</span>
+            </label>
+            <input
+              id="image_url"
+              name="image_url"
+              type="url"
+              value={fields.image_url}
+              onChange={handleChange}
+              className="field-input"
+              placeholder="https://example.com/image.jpg"
+            />
           </div>
 
           {/* ── Category ───────────────────────────────────────────── */}

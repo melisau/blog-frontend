@@ -36,6 +36,21 @@ export default function Navbar() {
       {/* ── Right side ────────────────────────────────────────── */}
       {isAuthenticated ? (
         <div className="navbar__right">
+          {/* Create new post button (+ icon) */}
+          <Link
+            to="/new-blog"
+            className="navbar__create-btn"
+            aria-label="Yeni yazı oluştur"
+            title="Yeni Yazı"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2.5"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </Link>
+
           {/* Avatar + name → profile */}
           {user?.id ? (
             <Link
@@ -49,9 +64,6 @@ export default function Navbar() {
                 size="sm"
                 iconId={user.icon_id ?? null}
               />
-              <span className="navbar__username">
-                {displayName ?? 'Kullanıcı'}
-              </span>
             </Link>
           ) : (
             /* id unknown (token-only login) — show avatar without link */
@@ -62,9 +74,6 @@ export default function Navbar() {
                 size="sm"
                 iconId={user?.icon_id ?? null}
               />
-              <span className="navbar__username">
-                {displayName ?? 'Kullanıcı'}
-              </span>
             </span>
           )}
 
