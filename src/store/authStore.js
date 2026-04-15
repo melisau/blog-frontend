@@ -37,6 +37,14 @@ const useAuthStore = create(
         set({ user: user ?? null, token });
       },
 
+      // updateUser — merges partial user fields into the stored user object.
+      // Used after profile edits (e.g. icon_id change) so the navbar reflects
+      // the change without requiring a full re-login.
+      updateUser: (partial) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, ...partial } : partial,
+        })),
+
       // logout — clears all auth state.  The persist middleware automatically
       // removes the persisted keys from localStorage when the values become null.
       logout: () => set({ user: null, token: null }),

@@ -9,6 +9,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import PrivateRoute from './components/PrivateRoute'
 import GuestRoute from './components/GuestRoute'
 import ToastContainer from './components/ToastContainer'
+import Navbar from './components/Navbar'
 
 import Home from './pages/Home'
 import BlogDetail from './pages/BlogDetail'
@@ -24,6 +25,7 @@ export default function App() {
   // <Routes> so it is never unmounted during page transitions.
   return (
     <>
+      <Navbar />
       <Routes>
         {/* Public routes */}
         <Route path="/" element={<Home />} />

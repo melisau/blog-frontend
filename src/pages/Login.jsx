@@ -65,23 +65,37 @@ export default function Login() {
         password: fields.password,
       });
 
-      // FastAPI returns `access_token`; some backends use `token`.
-      // Accept whichever field is present so the app works with both.
       const token = data.access_token ?? data.token ?? null;
 
       if (!token) {
-        // Response arrived but no token field found — likely a schema mismatch.
-        // Log the response so it is easy to spot in DevTools.
         console.error('[Login] Beklenmeyen API yanıtı:', data);
         setServerError('Sunucu yanıtı beklenmeyen formatta. Lütfen yöneticiyle iletişime geçin.');
         return;
       }
 
-      // user object is optional — some APIs only return the token on login.
-      login({ user: data.user ?? null, token });
+      // Try to fetch the current user's profile so the navbar can show their name.
+      // FastAPI login typically only returns a token; /users/me resolves the user object.
+      let userObj = data.user ?? data.account ?? null;
+      if (!userObj) {
+        try {
+          const meRes = await axiosInstance.get('/users/me', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          userObj = meRes.data;
+        } catch {
+          // /users/me not available — try common alternatives
+          try {
+            const meRes = await axiosInstance.get('/auth/me', {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            userObj = meRes.data;
+          } catch {
+            // Leave userObj null; username will show as initials in navbar
+          }
+        }
+      }
 
-      // replace: true prevents the login page from appearing in history,
-      // so the back button goes to the page before the auth flow.
+      login({ user: userObj, token });
       navigate(from, { replace: true });
     } catch (err) {
       setServerError(

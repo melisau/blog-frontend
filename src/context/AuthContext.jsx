@@ -16,9 +16,10 @@ export function useAuth() {
   const token           = useAuthStore((s) => s.token);
   const login           = useAuthStore((s) => s.login);
   const logout          = useAuthStore((s) => s.logout);
+  const updateUser      = useAuthStore((s) => s.updateUser);
   const isAuthenticated = !!token;
 
-  return { user, token, isAuthenticated, login, logout };
+  return { user, token, isAuthenticated, login, logout, updateUser };
 }
 
 // AuthProvider — no longer needed because Zustand requires no React Provider.

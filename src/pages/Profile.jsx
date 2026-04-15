@@ -13,6 +13,7 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import axiosInstance from '../api/axiosInstance'
 import { useAuth } from '../context/AuthContext'
+import Avatar, { AVATARS, getCachedIconId, saveAvatarCache } from '../components/Avatar'
 
 // ── Data normalisers ──────────────────────────────────────────────────────────
 
@@ -30,11 +31,23 @@ function normalizeUser(raw) {
   return {
     id:           raw.id,
     username:     raw.username ?? raw.name ?? raw.full_name ?? `Kullanıcı #${raw.id}`,
+    email:        raw.email ?? null,
     bio:          raw.bio ?? raw.description ?? '',
     joinDate,
+    // icon_id from backend (1-based, matches AVATARS[].id)
+    iconId:       raw.icon_id ?? raw.iconId ?? null,
     blogCount:    raw.post_count  ?? raw.postCount  ?? raw.blog_count ?? raw.blogCount ?? 0,
     commentCount: raw.comment_count ?? raw.commentCount ?? 0,
   }
+}
+
+// extractTags — same helper as in Home.jsx; converts any tag format to string[].
+function extractTags(b) {
+  const source = b.tags ?? b.tag_list ?? b.labels ?? b.keywords ?? []
+  const arr = Array.isArray(source) ? source : (source ? [source] : [])
+  return arr
+    .map((t) => (typeof t === 'string' ? t.trim() : (t?.name ?? t?.title ?? t?.label ?? null)))
+    .filter(Boolean)
 }
 
 // Converts a raw API blog (or list) into a uniform array.
@@ -52,11 +65,12 @@ function normalizeBlogs(raw) {
         })
       : ''
     return {
-      id:      b.id,
-      title:   b.title ?? '(Başlıksız)',
-      excerpt: b.excerpt ?? b.summary ?? (b.content?.slice(0, 120) + '…') ?? '',
+      id:       b.id,
+      title:    b.title ?? b.name ?? b.headline ?? '(Başlıksız)',
+      excerpt:  b.excerpt ?? b.summary ?? (b.content ? b.content.slice(0, 120) + '…' : ''),
       date,
-      tag:     b.category ?? b.tag ?? (b.tags?.[0]) ?? 'Genel',
+      category: typeof b.category === 'string' ? b.category : (b.category?.name ?? null),
+      tags:     extractTags(b),
     }
   })
 }
@@ -64,11 +78,8 @@ function normalizeBlogs(raw) {
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function Profile() {
   const { id } = useParams()
-  const { user: currentUser, isAuthenticated } = useAuth()
+  const { user: currentUser, isAuthenticated, updateUser } = useAuth()
 
-  // A user is viewing their own profile if their stored id matches the URL id.
-  // currentUser may be null when the backend only returns a token on login —
-  // in that case we conservatively treat the profile as someone else's.
   const isOwnProfile =
     isAuthenticated && currentUser?.id != null && String(currentUser.id) === String(id)
 
@@ -82,6 +93,89 @@ export default function Profile() {
   const [blogsLoading, setBlogsLoading]   = useState(true)
   const [blogsError,   setBlogsError]     = useState('')
 
+  // ── Avatar state (iconId: 1-based, matches backend icon_id) ─────────────
+  // Initialized from localStorage cache; overwritten once profileUser loads.
+  const [avatarChoice, setAvatarChoice]   = useState(() => getCachedIconId(id))
+
+  // ── Edit mode state ───────────────────────────────────────────────────────
+  const [editMode,      setEditMode]      = useState(false)
+  const [editFields,    setEditFields]    = useState({ username: '', bio: '' })
+  const [editAvatar,    setEditAvatar]    = useState(null)   // draft avatar while editing
+  const [editErrors,    setEditErrors]    = useState({})
+  const [editSaving,    setEditSaving]    = useState(false)
+  const [editSuccess,   setEditSuccess]   = useState(false)
+  const [editServerErr, setEditServerErr] = useState('')
+
+  function openEdit() {
+    setEditFields({ username: profileUser.username, bio: profileUser.bio ?? '' })
+    setEditAvatar(avatarChoice)   // draft starts from the currently displayed iconId
+    setEditErrors({})
+    setEditSuccess(false)
+    setEditServerErr('')
+    setEditMode(true)
+  }
+
+  function cancelEdit() {
+    setEditMode(false)
+    setEditAvatar(null)
+  }
+
+  function validateEdit(f) {
+    const errs = {}
+    if (!f.username.trim()) errs.username = 'Kullanıcı adı boş olamaz.'
+    else if (f.username.trim().length < 3) errs.username = 'En az 3 karakter olmalıdır.'
+    return errs
+  }
+
+  async function handleEditSave(e) {
+    e.preventDefault()
+    const errs = validateEdit(editFields)
+    if (Object.keys(errs).length) { setEditErrors(errs); return }
+
+    setEditSaving(true)
+    setEditServerErr('')
+    setEditSuccess(false)
+
+    const trimmedUsername = editFields.username.trim()
+    const trimmedBio      = editFields.bio.trim()
+
+    try {
+      // PUT /users/:id — send icon_id so backend stores the choice.
+      const payload = { username: trimmedUsername, bio: trimmedBio }
+      if (editAvatar !== null) payload.icon_id = editAvatar
+      await axiosInstance.put(`/users/${id}`, payload)
+    } catch {
+      // Non-blocking: localStorage and local state still update even if API rejects.
+    }
+
+    // Write-through to localStorage cache so the icon renders instantly on next load.
+    if (editAvatar !== null) {
+      saveAvatarCache(id, editAvatar)
+      setAvatarChoice(editAvatar)
+    } else {
+      saveAvatarCache(id, null)
+      setAvatarChoice(null)
+    }
+
+    // If this is the current user's own profile, sync the auth store so the
+    // Navbar reflects the new avatar and username immediately.
+    if (isOwnProfile) {
+      updateUser({ icon_id: editAvatar, username: trimmedUsername })
+    }
+
+    // Update local profile state so UI reflects changes immediately.
+    setProfileUser((prev) => ({
+      ...prev,
+      username: trimmedUsername,
+      bio:      trimmedBio,
+      iconId:   editAvatar,
+    }))
+
+    setEditSaving(false)
+    setEditSuccess(true)
+    setTimeout(() => { setEditMode(false); setEditSuccess(false) }, 900)
+  }
+
   // Fetch user info whenever the id segment changes.
   useEffect(() => {
     let cancelled = false
@@ -91,7 +185,15 @@ export default function Profile() {
     axiosInstance
       .get(`/users/${id}`)
       .then(({ data }) => {
-        if (!cancelled) setProfileUser(normalizeUser(data))
+        if (cancelled) return
+        const normalized = normalizeUser(data)
+        setProfileUser(normalized)
+        // Sync avatarChoice with the icon_id returned by the backend.
+        // Also write to localStorage cache so next render is instant.
+        if (normalized.iconId != null) {
+          setAvatarChoice(normalized.iconId)
+          saveAvatarCache(normalized.id, normalized.iconId)
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -120,7 +222,13 @@ export default function Profile() {
       .get(`/users/${id}/blogs`)
       .catch(() => axiosInstance.get(`/blogs?author_id=${id}`))  // fallback
       .then(({ data }) => {
-        if (!cancelled) setBlogs(normalizeBlogs(data))
+        if (cancelled) return
+        const list = normalizeBlogs(data)
+        setBlogs(list)
+        // Derive the real count from the fetched list — the user endpoint
+        // often omits post_count or returns 0, so the list length is the
+        // authoritative value.
+        setProfileUser((prev) => prev ? { ...prev, blogCount: list.length } : prev)
       })
       .catch(() => {
         if (!cancelled) setBlogsError('Yazılar yüklenemedi.')
@@ -149,23 +257,138 @@ export default function Profile() {
       {/* ── User info card ─────────────────────────────────────────────── */}
       {userLoading ? (
         <div className="profile-card">
-          <div className="skeleton-block profile-avatar" />
-          <div className="profile-info" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="skeleton-block" style={{ width: 72, height: 72, borderRadius: '50%', flexShrink: 0 }} />
+          <div className="profile-info">
             <div className="skeleton-line skeleton-line--short" style={{ height: 20 }} />
             <div className="skeleton-line skeleton-line--long" />
             <div className="skeleton-line" style={{ width: '60%' }} />
           </div>
         </div>
+
+      ) : editMode ? (
+        /* ── Edit form ──────────────────────────────────────────────────── */
+        <form className="profile-edit-card" onSubmit={handleEditSave} noValidate>
+
+          {/* Avatar picker */}
+          <div className="profile-edit__avatar-section">
+            <p className="profile-edit__label">Avatar Seç</p>
+            <div className="avatar-picker" role="group" aria-label="Avatar seç">
+              {AVATARS.map((av) => (
+                <button
+                  key={av.id}
+                  type="button"
+                  className={`avatar-picker__item${editAvatar === av.id ? ' avatar-picker__item--active' : ''}`}
+                  onClick={() => setEditAvatar(av.id)}
+                  title={av.label}
+                  aria-label={`${av.label} avatarını seç`}
+                  aria-pressed={editAvatar === av.id}
+                >
+                  <Avatar
+                    userId={profileUser.id}
+                    username={editFields.username || profileUser.username}
+                    size="md"
+                    iconId={av.id}
+                  />
+                </button>
+              ))}
+            </div>
+            {editAvatar !== null && (
+              <button
+                type="button"
+                className="avatar-picker__clear"
+                onClick={() => setEditAvatar(null)}
+              >
+                × Avatarı kaldır — baş harflere dön
+              </button>
+            )}
+            {/* Live preview */}
+            <div className="profile-edit__preview">
+              <Avatar
+                userId={profileUser.id}
+                username={editFields.username || profileUser.username}
+                size="lg"
+                iconId={editAvatar}
+              />
+              <span className="profile-edit__preview-label">Önizleme</span>
+            </div>
+          </div>
+
+          {/* Fields */}
+          <div className="profile-edit__fields">
+            {editServerErr && (
+              <div className="auth-server-error" role="alert">{editServerErr}</div>
+            )}
+            {editSuccess && (
+              <div className="comment-form__success" role="status">Profil güncellendi ✓</div>
+            )}
+
+            <div className="field-group">
+              <label htmlFor="edit-username" className="field-label">Kullanıcı Adı</label>
+              <input
+                id="edit-username"
+                type="text"
+                value={editFields.username}
+                onChange={(e) => {
+                  setEditFields((p) => ({ ...p, username: e.target.value }))
+                  if (editErrors.username) setEditErrors((p) => ({ ...p, username: '' }))
+                }}
+                className={`field-input${editErrors.username ? ' field-input--error' : ''}`}
+                placeholder="Kullanıcı adı"
+                maxLength={50}
+              />
+              {editErrors.username && <p className="field-error">{editErrors.username}</p>}
+            </div>
+
+            <div className="field-group">
+              <label htmlFor="edit-bio" className="field-label">
+                Biyografi
+                <span className="field-label__optional"> (isteğe bağlı)</span>
+              </label>
+              <textarea
+                id="edit-bio"
+                rows={3}
+                value={editFields.bio}
+                onChange={(e) => setEditFields((p) => ({ ...p, bio: e.target.value }))}
+                className="field-input field-textarea"
+                placeholder="Kendinizden kısaca bahsedin…"
+                maxLength={300}
+              />
+              <div className="field-hint">{editFields.bio.length}/300</div>
+            </div>
+
+            <div className="profile-edit__actions">
+              <button type="submit" className="btn btn--primary" disabled={editSaving}>
+                {editSaving ? 'Kaydediliyor…' : 'Kaydet'}
+              </button>
+              <button type="button" className="btn btn--ghost" onClick={cancelEdit} disabled={editSaving}>
+                İptal
+              </button>
+            </div>
+          </div>
+        </form>
+
       ) : (
+        /* ── View mode ──────────────────────────────────────────────────── */
         <div className="profile-card">
-          <div className="profile-avatar" />
+          <Avatar
+            userId={profileUser.id}
+            username={profileUser.username}
+            size="lg"
+            iconId={avatarChoice}
+          />
+
           <div className="profile-info">
             <div className="profile-info__top">
               <h1 className="profile-username">{profileUser.username}</h1>
               {isOwnProfile && (
-                <Link to="/edit-profile" className="btn btn--ghost btn--sm">
-                  Profili Düzenle
-                </Link>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn--ghost btn--sm" onClick={openEdit}>
+                    Profili Düzenle
+                  </button>
+                  <Link to="/new-blog" className="btn btn--primary btn--sm">
+                    Yeni Yazı
+                  </Link>
+                </div>
               )}
             </div>
 
@@ -173,8 +396,18 @@ export default function Profile() {
               <p className="profile-bio">{profileUser.bio}</p>
             )}
 
-            {profileUser.joinDate && (
-              <div className="profile-meta">
+            <div className="profile-meta">
+              {profileUser.email && (
+                <span className="profile-meta__item">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="4" width="20" height="16" rx="2"/>
+                    <polyline points="2,4 12,13 22,4"/>
+                  </svg>
+                  {profileUser.email}
+                </span>
+              )}
+              {profileUser.joinDate && (
                 <span className="profile-meta__item">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" strokeWidth="2">
@@ -185,23 +418,26 @@ export default function Profile() {
                   </svg>
                   {profileUser.joinDate} tarihinde katıldı
                 </span>
-              </div>
-            )}
+              )}
+            </div>
 
-            {/* Stats: only render when at least one count is non-zero */}
-            {(profileUser.blogCount > 0 || profileUser.commentCount > 0) && (
-              <div className="profile-stats">
-                <div className="profile-stat">
-                  <span className="profile-stat__value">{profileUser.blogCount}</span>
-                  <span className="profile-stat__label">Yazı</span>
-                </div>
-                <div className="profile-stat__divider" />
-                <div className="profile-stat">
-                  <span className="profile-stat__value">{profileUser.commentCount}</span>
-                  <span className="profile-stat__label">Yorum</span>
-                </div>
+            <div className="profile-stats">
+              <div className="profile-stat">
+                <span className="profile-stat__value">
+                  {blogsLoading ? '…' : profileUser.blogCount}
+                </span>
+                <span className="profile-stat__label">Yazı</span>
               </div>
-            )}
+              {profileUser.commentCount > 0 && (
+                <>
+                  <div className="profile-stat__divider" />
+                  <div className="profile-stat">
+                    <span className="profile-stat__value">{profileUser.commentCount}</span>
+                    <span className="profile-stat__label">Yorum</span>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -250,7 +486,17 @@ export default function Profile() {
               <Link key={blog.id} to={`/blogs/${blog.id}`} className="blog-card">
                 <div className="blog-card__thumb" />
                 <div className="blog-card__body">
-                  <span className="blog-card__tag">{blog.tag}</span>
+                  <div className="blog-card__tags">
+                    {blog.category && (
+                      <span className="blog-card__tag">{blog.category}</span>
+                    )}
+                    {blog.tags.map((t) => (
+                      <span key={t} className="blog-card__tag blog-card__tag--outline">{t}</span>
+                    ))}
+                    {!blog.category && blog.tags.length === 0 && (
+                      <span className="blog-card__tag">Genel</span>
+                    )}
+                  </div>
                   <h2 className="blog-card__title">{blog.title}</h2>
                   <p className="blog-card__excerpt">{blog.excerpt}</p>
                   <div className="blog-card__footer">

@@ -10,23 +10,52 @@ import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import axiosInstance from '../api/axiosInstance'
 import { useAuth } from '../context/AuthContext'
+import Avatar from '../components/Avatar'
 
 // ── Normalisers ───────────────────────────────────────────────────────────────
 
+function extractTags(raw) {
+  const source = raw.tags ?? raw.tag_list ?? raw.labels ?? raw.keywords ?? []
+  const arr = Array.isArray(source) ? source : (source ? [source] : [])
+  return arr
+    .map((t) => (typeof t === 'string' ? t.trim() : (t?.name ?? t?.title ?? t?.label ?? null)))
+    .filter(Boolean)
+}
+
 function normalizeBlog(raw) {
   const dateRaw = raw.created_at ?? raw.createdAt ?? raw.date ?? null
+
+  // Resolve author id from any common field convention.
+  const authorId =
+    raw.author?.id ?? raw.author_id ??
+    raw.owner?.id  ?? raw.owner_id  ??
+    raw.user?.id   ?? raw.user_id   ??
+    raw.created_by?.id ?? raw.created_by ?? null
+
+  // Resolve author display name — leave null when not found so the component
+  // can trigger a secondary GET /users/:id fetch (same pattern as Home.jsx).
+  const username =
+    raw.author?.username ?? raw.author?.name ?? raw.author?.full_name ??
+    raw.owner?.username  ?? raw.owner?.name  ??
+    raw.user?.username   ?? raw.user?.name   ??
+    raw.created_by?.username ??
+    raw.author_name ?? raw.owner_name ?? raw.writer ?? null
+
+  // icon_id (1-based) from whichever author field the backend uses.
+  const authorIconId =
+    raw.author?.icon_id  ?? raw.owner?.icon_id  ??
+    raw.user?.icon_id    ?? raw.created_by?.icon_id ?? null
+
   return {
     id:       raw.id,
-    title:    raw.title ?? '(Başlıksız)',
+    title:    raw.title ?? raw.name ?? raw.headline ?? '(Başlıksız)',
     content:  raw.content ?? raw.body ?? '',
-    tag:      raw.category ?? raw.tag ?? raw.tags?.[0] ?? 'Genel',
+    category: typeof raw.category === 'string' ? raw.category : (raw.category?.name ?? null),
+    tags:     extractTags(raw),
     date:     dateRaw
       ? new Date(dateRaw).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
       : '',
-    author: {
-      id:       raw.author?.id       ?? raw.author_id       ?? null,
-      username: raw.author?.username ?? raw.author?.name    ?? raw.author_name ?? 'Anonim',
-    },
+    author: { id: authorId, username, iconId: authorIconId },
   }
 }
 
@@ -39,8 +68,12 @@ function normalizeComment(raw) {
       ? new Date(dateRaw).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
       : '',
     author: {
-      id:       raw.author?.id       ?? raw.author_id       ?? null,
-      username: raw.author?.username ?? raw.author?.name    ?? raw.author_name ?? 'Anonim',
+      id: raw.author?.id ?? raw.author_id ?? raw.user?.id ?? raw.user_id ?? null,
+      username:
+        raw.author?.username ?? raw.author?.name ?? raw.author?.full_name ??
+        raw.user?.username   ?? raw.user?.name   ??
+        raw.author_name ?? raw.owner_name ?? null,
+      iconId: raw.author?.icon_id ?? raw.user?.icon_id ?? null,
     },
   }
 }
@@ -84,7 +117,35 @@ export default function BlogDetail() {
 
     axiosInstance
       .get(`/blogs/${id}`)
-      .then(({ data }) => { if (!cancelled) setBlog(normalizeBlog(data)) })
+      .then(async ({ data }) => {
+        if (cancelled) return
+        const normalized = normalizeBlog(data)
+
+        // If the blog response has an author id but no username, resolve it
+        // via GET /users/:id — same strategy as Home.jsx uses for cards.
+        if (!normalized.author.username && normalized.author.id) {
+          try {
+            const { data: u } = await axiosInstance.get(`/users/${normalized.author.id}`)
+            normalized.author.username = u.username ?? u.name ?? u.full_name ?? null
+          } catch {
+            // silently ignore; will show nothing instead of "Anonim"
+          }
+        }
+
+        if (cancelled) return
+        setBlog(normalized)
+
+        // Set page title and meta description from the actual blog content.
+        document.title = `${normalized.title} | Blog`
+        let meta = document.querySelector('meta[name="description"]')
+        if (!meta) {
+          meta = document.createElement('meta')
+          meta.setAttribute('name', 'description')
+          document.head.appendChild(meta)
+        }
+        const plainExcerpt = normalized.content.slice(0, 160).replace(/\s+/g, ' ').trim()
+        meta.setAttribute('content', plainExcerpt)
+      })
       .catch((err) => {
         if (cancelled) return
         setBlogError(
@@ -95,7 +156,10 @@ export default function BlogDetail() {
       })
       .finally(() => { if (!cancelled) setBlogLoading(false) })
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      document.title = 'Blog | En Son Yazılar'
+    }
   }, [id])
 
   // Fetch comments when id changes
@@ -125,7 +189,21 @@ export default function BlogDetail() {
       const { data } = await axiosInstance.post(`/blogs/${id}/comments`, {
         content: commentText.trim(),
       })
-      setComments((prev) => [...prev, normalizeComment(data)])
+      const newComment = normalizeComment(data)
+
+      // Backend often returns the comment without author info.
+      // Fill in from the currently authenticated user so the name shows immediately.
+      if (!newComment.author.username && user) {
+        newComment.author = {
+          id:       newComment.author.id ?? user?.id ?? null,
+          username: user?.username ?? user?.name ?? user?.full_name ?? null,
+        }
+      }
+      if (!newComment.author.id && user?.id) {
+        newComment.author.id = user.id
+      }
+
+      setComments((prev) => [...prev, newComment])
       setCommentText('')
       setSubmitSuccess(true)
     } catch {
@@ -195,18 +273,45 @@ export default function BlogDetail() {
       {/* ── Blog article ────────────────────────────────────────────────── */}
       <article className="blog-article">
         <div className="blog-article__meta">
-          <span className="blog-card__tag">{blog.tag}</span>
+          <div className="blog-card__tags">
+            {blog.category && (
+              <Link
+                to={`/?category=${encodeURIComponent(blog.category)}`}
+                className="blog-card__tag blog-card__tag--link"
+                aria-label={`${blog.category} kategorisindeki yazılar`}
+              >
+                {blog.category}
+              </Link>
+            )}
+            {blog.tags.map((t) => (
+              <Link
+                key={t}
+                to={`/?tag=${encodeURIComponent(t)}`}
+                className="blog-card__tag blog-card__tag--outline blog-card__tag--link"
+                aria-label={`${t} etiketindeki yazılar`}
+              >
+                #{t}
+              </Link>
+            ))}
+            {!blog.category && blog.tags.length === 0 && (
+              <span className="blog-card__tag">Genel</span>
+            )}
+          </div>
           <span className="blog-article__date">{blog.date}</span>
         </div>
 
         <h1 className="blog-article__title">{blog.title}</h1>
 
         <div className="blog-article__author">
-          <div className="avatar" />
+          <Avatar userId={blog.author.id} username={blog.author.username} size="md" iconId={blog.author.iconId ?? null} />
           <div className="blog-article__author-info">
-            <Link to={`/profile/${blog.author.id}`} className="blog-article__author-name">
-              {blog.author.username}
-            </Link>
+            {blog.author.username && blog.author.id ? (
+              <Link to={`/profile/${blog.author.id}`} className="blog-article__author-name">
+                {blog.author.username}
+              </Link>
+            ) : blog.author.username ? (
+              <span className="blog-article__author-name">{blog.author.username}</span>
+            ) : null}
             <span className="blog-article__author-date">{blog.date} tarihinde yayınlandı</span>
           </div>
         </div>
@@ -259,12 +364,16 @@ export default function BlogDetail() {
               const isCommentAuthor = isAuthenticated && user?.id != null && String(user.id) === String(c.author.id)
               return (
                 <div key={c.id} className="comment">
-                  <div className="avatar avatar--sm" />
+                  <Avatar userId={c.author.id} username={c.author.username} size="sm" iconId={c.author.iconId ?? null} />
                   <div className="comment__body">
                     <div className="comment__header">
-                      <Link to={`/profile/${c.author.id}`} className="comment__author">
-                        {c.author.username}
-                      </Link>
+                      {c.author.username && c.author.id ? (
+                        <Link to={`/profile/${c.author.id}`} className="comment__author">
+                          {c.author.username}
+                        </Link>
+                      ) : (
+                        <span className="comment__author">{c.author.username ?? '—'}</span>
+                      )}
                       <span className="comment__date">{c.date}</span>
                       {isCommentAuthor && (
                         <button

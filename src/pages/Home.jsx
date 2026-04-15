@@ -1,14 +1,36 @@
 // Home page — fetches and paginates blog posts from GET /blogs.
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import axiosInstance from '../api/axiosInstance'
 import { useAuth } from '../context/AuthContext'
 
 const POSTS_PER_PAGE = 6
 
+// Updates or creates the <meta name="description"> tag in <head>.
+function setMetaDescription(content) {
+  let el = document.querySelector('meta[name="description"]')
+  if (!el) {
+    el = document.createElement('meta')
+    el.setAttribute('name', 'description')
+    document.head.appendChild(el)
+  }
+  el.setAttribute('content', content)
+}
+
 // normalizeBlog — maps any backend field-name convention to the shape the UI
 // expects.  Handles both camelCase and snake_case, plain arrays and paginated
 // response envelopes ({ items, results, blogs, data }).
+// extractTags — converts any tag format the backend might return into a clean
+// string array. Handles: plain string array, object array ({id,name}), comma
+// separated string, or a single string.
+function extractTags(raw) {
+  const source = raw.tags ?? raw.tag_list ?? raw.labels ?? raw.keywords ?? []
+  const arr = Array.isArray(source) ? source : (source ? [source] : [])
+  return arr
+    .map((t) => (typeof t === 'string' ? t.trim() : (t?.name ?? t?.title ?? t?.label ?? null)))
+    .filter(Boolean)
+}
+
 function normalizeBlog(raw) {
   const dateRaw = raw.created_at ?? raw.createdAt ?? raw.date ?? null
   const date = dateRaw
@@ -30,10 +52,11 @@ function normalizeBlog(raw) {
 
   return {
     id:       raw.id,
-    title:    raw.title ?? '(Başlıksız)',
+    title:    raw.title ?? raw.name ?? raw.headline ?? '(Başlıksız)',
     excerpt,
     date,
-    tag:      raw.category ?? raw.tag ?? raw.tags?.[0] ?? 'Genel',
+    category: typeof raw.category === 'string' ? raw.category : (raw.category?.name ?? null),
+    tags:     extractTags(raw),
     authorId: raw.author?.id ?? raw.author_id ?? null,
     author:   embeddedName ? { username: embeddedName } : null,
   }
@@ -79,7 +102,13 @@ function extractPage(data, page, limit) {
 }
 
 export default function Home() {
-  const { isAuthenticated, logout } = useAuth()
+  const { isAuthenticated, logout, user } = useAuth()
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Active filter values read directly from URL — makes links shareable & crawlable.
+  const activeCategory = searchParams.get('category') ?? ''
+  const activeTag      = searchParams.get('tag') ?? ''
 
   const [page,       setPage]       = useState(1)
   const [blogs,      setBlogs]      = useState([])
@@ -87,15 +116,42 @@ export default function Home() {
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState('')
 
+  // Reset to page 1 whenever a filter changes.
+  useEffect(() => { setPage(1) }, [activeCategory, activeTag])
+
+  // Update document title and meta description based on active filter.
+  // This is the single highest-impact SEO change for a React SPA —
+  // Google reads <title> even when JS-rendered.
+  useEffect(() => {
+    if (activeCategory) {
+      document.title = `${activeCategory} Yazıları | Blog`
+      setMetaDescription(`${activeCategory} kategorisindeki tüm blog yazıları.`)
+    } else if (activeTag) {
+      document.title = `#${activeTag} | Blog`
+      setMetaDescription(`"${activeTag}" etiketiyle ilgili blog yazıları.`)
+    } else {
+      document.title = 'Blog | En Son Yazılar'
+      setMetaDescription('En güncel blog yazılarını keşfedin.')
+    }
+  }, [activeCategory, activeTag])
+
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError('')
 
-    // GET /blogs with both skip/limit (FastAPI default) and page param.
+    // GET /blogs — pass category/tag filters so the backend can handle them.
+    // If the backend ignores unknown params the full list still loads.
     const skip = (page - 1) * POSTS_PER_PAGE
+    const params = new URLSearchParams({
+      skip,
+      limit: POSTS_PER_PAGE,
+      page,
+      ...(activeCategory && { category: activeCategory }),
+      ...(activeTag      && { tag: activeTag }),
+    })
     axiosInstance
-      .get(`/blogs?skip=${skip}&limit=${POSTS_PER_PAGE}&page=${page}`)
+      .get(`/blogs?${params}`)
       .then(async ({ data }) => {
         if (cancelled) return
         const { blogs: list, totalPages: tp } = extractPage(data, page, POSTS_PER_PAGE)
@@ -134,7 +190,7 @@ export default function Home() {
       .finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
-  }, [page])
+  }, [page, activeCategory, activeTag])
 
   return (
     <div className="page-container">
@@ -146,6 +202,9 @@ export default function Home() {
         {isAuthenticated ? (
           <div className="page-actions">
             <Link to="/new-blog" className="btn btn--primary">Yeni Yazı</Link>
+            {user?.id && (
+              <Link to={`/profile/${user.id}`} className="btn btn--ghost">Profilim</Link>
+            )}
             <button className="btn btn--ghost" onClick={logout}>Çıkış Yap</button>
           </div>
         ) : (
@@ -155,6 +214,30 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* ── Active filter indicator ───────────────────────────── */}
+      {(activeCategory || activeTag) && (
+        <div className="filter-bar">
+          <span className="filter-bar__label">Filtre:</span>
+          {activeCategory && (
+            <span className="blog-card__tag">
+              {activeCategory}
+            </span>
+          )}
+          {activeTag && (
+            <span className="blog-card__tag blog-card__tag--outline">
+              #{activeTag}
+            </span>
+          )}
+          <button
+            className="filter-bar__clear"
+            onClick={() => { setSearchParams({}); setPage(1) }}
+            aria-label="Filtreyi temizle"
+          >
+            × Filtreyi Kaldır
+          </button>
+        </div>
+      )}
 
       {/* ── Error ─────────────────────────────────────────────── */}
       {error && (
@@ -187,21 +270,61 @@ export default function Home() {
       ) : (
         <div className="blog-grid">
           {blogs.map((blog) => (
-            <Link key={blog.id} to={`/blogs/${blog.id}`} className="blog-card">
+            <article
+              key={blog.id}
+              className="blog-card"
+              onClick={() => navigate(`/blogs/${blog.id}`)}
+              role="link"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && navigate(`/blogs/${blog.id}`)}
+            >
               <div className="blog-card__thumb" />
               <div className="blog-card__body">
-                <span className="blog-card__tag">{blog.tag}</span>
+                <div className="blog-card__tags">
+                  {blog.category && (
+                    <Link
+                      to={`/?category=${encodeURIComponent(blog.category)}`}
+                      className="blog-card__tag blog-card__tag--link"
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`${blog.category} kategorisindeki yazılar`}
+                    >
+                      {blog.category}
+                    </Link>
+                  )}
+                  {blog.tags.map((t) => (
+                    <Link
+                      key={t}
+                      to={`/?tag=${encodeURIComponent(t)}`}
+                      className="blog-card__tag blog-card__tag--outline blog-card__tag--link"
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`${t} etiketindeki yazılar`}
+                    >
+                      #{t}
+                    </Link>
+                  ))}
+                  {!blog.category && blog.tags.length === 0 && (
+                    <span className="blog-card__tag">Genel</span>
+                  )}
+                </div>
                 <h2 className="blog-card__title">{blog.title}</h2>
                 <p className="blog-card__excerpt">{blog.excerpt}</p>
                 <div className="blog-card__footer">
-                  {blog.author && (
+                  {blog.author && blog.authorId ? (
+                    <Link
+                      to={`/profile/${blog.authorId}`}
+                      className="blog-card__author blog-card__author--link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {blog.author.username}
+                    </Link>
+                  ) : blog.author ? (
                     <span className="blog-card__author">{blog.author.username}</span>
-                  )}
+                  ) : null}
                   <span className="blog-card__date">{blog.date}</span>
                 </div>
                 <span className="blog-card__read">Devamını Oku →</span>
               </div>
-            </Link>
+            </article>
           ))}
         </div>
       )}
