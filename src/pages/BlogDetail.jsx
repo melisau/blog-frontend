@@ -82,6 +82,9 @@ export default function BlogDetail() {
   const [deletingCommentId, setDeletingCommentId] = useState(null)
   const [deletingBlog,      setDeletingBlog]      = useState(false)
 
+  const [isFavorited,     setIsFavorited]     = useState(false)
+  const [favoriteLoading, setFavoriteLoading] = useState(false)
+
   useEffect(() => {
     let cancelled = false
     setBlogLoading(true)
@@ -107,6 +110,37 @@ export default function BlogDetail() {
 
     return () => { cancelled = true; document.title = 'Blog | En Son Yazılar' }
   }, [id])
+
+  // Check if this blog is already saved to the user's library
+  useEffect(() => {
+    if (!isAuthenticated || !id) return
+    let cancelled = false
+    axiosInstance
+      .get('/users/me/favorites')
+      .then(({ data }) => {
+        if (cancelled) return
+        const list = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.data ?? [])
+        const saved = list.some((b) => String(b.id) === String(id))
+        setIsFavorited(saved)
+      })
+      .catch(() => { /* silent */ })
+    return () => { cancelled = true }
+  }, [id, isAuthenticated])
+
+  async function handleToggleFavorite() {
+    if (favoriteLoading) return
+    setFavoriteLoading(true)
+    try {
+      if (isFavorited) {
+        await axiosInstance.delete(`/users/me/favorites/${id}`)
+        setIsFavorited(false)
+      } else {
+        await axiosInstance.post(`/users/me/favorites/${id}`)
+        setIsFavorited(true)
+      }
+    } catch { /* toast shown by interceptor */ }
+    finally { setFavoriteLoading(false) }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -237,7 +271,26 @@ export default function BlogDetail() {
           image={blog.imageUrl}
         />
       )}
-      <Link to="/" className="back-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg></Link>
+      <div className="detail-topbar">
+        <Link to="/" className="back-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg></Link>
+        {isAuthenticated && (
+          <button
+            className={`favorite-btn${isFavorited ? ' favorite-btn--active' : ''}`}
+            onClick={handleToggleFavorite}
+            disabled={favoriteLoading}
+            title={isFavorited ? 'Kütüphaneden kaldır' : 'Kütüphaneye kaydet'}
+            aria-label={isFavorited ? 'Kütüphaneden kaldır' : 'Kütüphaneye kaydet'}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24"
+              fill={isFavorited ? 'currentColor' : 'none'}
+              stroke="currentColor" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z"/>
+            </svg>
+            <span>{isFavorited ? 'Kaydedildi' : 'Kaydet'}</span>
+          </button>
+        )}
+      </div>
 
       <BlogContent 
         blog={blog} 

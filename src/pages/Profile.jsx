@@ -97,6 +97,10 @@ export default function Profile() {
   // Initialized from localStorage cache; overwritten once profileUser loads.
   const [avatarChoice, setAvatarChoice]   = useState(() => getCachedIconId(id))
 
+  // ── Follow state ──────────────────────────────────────────────────────────
+  const [isFollowing,     setIsFollowing]     = useState(false)
+  const [followLoading,   setFollowLoading]   = useState(false)
+
   // ── Edit mode state ───────────────────────────────────────────────────────
   const [editMode,      setEditMode]      = useState(false)
   const [editFields,    setEditFields]    = useState({ username: '', bio: '' })
@@ -105,6 +109,36 @@ export default function Profile() {
   const [editSaving,    setEditSaving]    = useState(false)
   const [editSuccess,   setEditSuccess]   = useState(false)
   const [editServerErr, setEditServerErr] = useState('')
+
+  // Check follow status when viewing another user's profile
+  useEffect(() => {
+    if (isOwnProfile || !isAuthenticated || !id) return
+    let cancelled = false
+    axiosInstance
+      .get('/users/me/following')
+      .then(({ data }) => {
+        if (cancelled) return
+        const list = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.data ?? [])
+        setIsFollowing(list.some((u) => String(u.id) === String(id)))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [id, isAuthenticated, isOwnProfile])
+
+  async function handleToggleFollow() {
+    if (followLoading) return
+    setFollowLoading(true)
+    try {
+      if (isFollowing) {
+        await axiosInstance.delete(`/users/me/following/${id}`)
+        setIsFollowing(false)
+      } else {
+        await axiosInstance.post(`/users/me/following/${id}`)
+        setIsFollowing(true)
+      }
+    } catch { /* toast shown by interceptor */ }
+    finally { setFollowLoading(false) }
+  }
 
   function openEdit() {
     setEditFields({ username: profileUser.username, bio: profileUser.bio ?? '' })
@@ -380,7 +414,7 @@ export default function Profile() {
           <div className="profile-info">
             <div className="profile-info__top">
               <h1 className="profile-username">{profileUser.username}</h1>
-              {isOwnProfile && (
+              {isOwnProfile ? (
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn btn--ghost btn--sm" onClick={openEdit}>
                     Profili Düzenle
@@ -389,6 +423,18 @@ export default function Profile() {
                     Yeni Yazı
                   </Link>
                 </div>
+              ) : isAuthenticated && (
+                <button
+                  className={`follow-btn${isFollowing ? ' follow-btn--following' : ''}`}
+                  onClick={handleToggleFollow}
+                  disabled={followLoading}
+                >
+                  {followLoading
+                    ? '…'
+                    : isFollowing
+                    ? 'Takip Ediliyor'
+                    : 'Takip Et'}
+                </button>
               )}
             </div>
 
