@@ -1754,6 +1754,99 @@ p {
   opacity: 0.6;
 }
 
+/* ── Cover image upload zone ─────────────────────────── */
+.cover-upload-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 160px;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  background: var(--bg-secondary, var(--bg));
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  outline: none;
+}
+
+.cover-upload-zone:hover,
+.cover-upload-zone:focus {
+  border-color: var(--accent);
+}
+
+.cover-upload-zone--dragging {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg));
+}
+
+.cover-upload-zone__placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  pointer-events: none;
+  padding: 24px;
+  text-align: center;
+}
+
+.cover-upload-zone__placeholder svg {
+  opacity: 0.45;
+}
+
+.cover-upload-zone__text {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.cover-upload-zone__link {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.cover-upload-zone__hint {
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+.cover-upload-zone__preview {
+  position: relative;
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.cover-upload-zone__preview img {
+  display: block;
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+}
+
+.cover-upload-zone__remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.cover-upload-zone__remove:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
 /* ── Small button variant ────────────────────────────── */
 .btn--sm {
   padding: 5px 12px;

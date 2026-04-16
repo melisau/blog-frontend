@@ -10,6 +10,14 @@ const POSTS_PER_PAGE = 6
 
 // ── Normalisers ──────────────────────────────────────────────────────────────
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+function resolveImageUrl(url) {
+  if (!url) return null
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  return `${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`
+}
+
 function extractTags(raw) {
   const source = raw.tags ?? raw.tag_list ?? raw.labels ?? raw.keywords ?? []
   const arr = Array.isArray(source) ? source : (source ? [source] : [])
@@ -38,7 +46,7 @@ function normalizeBlog(raw) {
     tags:     extractTags(raw),
     authorId: raw.author?.id ?? raw.author_id ?? null,
     author:   embeddedName ? { username: embeddedName } : null,
-    imageUrl: raw.image_url ?? raw.imageUrl ?? null,
+    imageUrl: resolveImageUrl(raw.cover_image_url ?? raw.image_url ?? raw.imageUrl ?? null),
   }
 }
 

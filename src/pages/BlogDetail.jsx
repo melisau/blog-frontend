@@ -9,6 +9,14 @@ import SEO from '../components/SEO'
 
 // ── Normalisers ──────────────────────────────────────────────────────────────
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+function resolveImageUrl(url) {
+  if (!url) return null
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  return `${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`
+}
+
 function extractTags(raw) {
   const source = raw.tags ?? raw.tag_list ?? raw.labels ?? raw.keywords ?? []
   const arr = Array.isArray(source) ? source : (source ? [source] : [])
@@ -31,7 +39,7 @@ function normalizeBlog(raw) {
     tags:     extractTags(raw),
     date:     dateRaw ? new Date(dateRaw).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) : '',
     author:   { id: authorId, username, iconId: authorIconId },
-    imageUrl: raw.image_url ?? raw.imageUrl ?? null,
+    imageUrl: resolveImageUrl(raw.cover_image_url ?? raw.image_url ?? raw.imageUrl ?? null),
   }
 }
 
