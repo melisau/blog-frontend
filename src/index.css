@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
+  --text: #2d325b;
+  --text-h: #2d325b;
+  --bg: #f9c5d1;
+  --border: rgba(45, 50, 91, 0.22);
+  --code-bg: #f0adc0;
+  --accent: #2b6a9b;
+  --accent-bg: rgba(43, 106, 155, 0.12);
+  --accent-border: rgba(43, 106, 155, 0.45);
+  --social-bg: rgba(249, 197, 209, 0.55);
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
@@ -37,32 +37,51 @@
 [data-theme="dark"],
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
+    --text: #c4a0b5;
+    --text-h: #f5ccd8;
+    --bg: #1e1e30;
+    --border: #d8979d;
+    --code-bg: #26203a;
+    --accent: #e15771;
+    --accent-bg: rgba(225, 87, 113, 0.15);
+    --accent-border: rgba(225, 87, 113, 0.45);
+    --social-bg: rgba(216, 151, 157, 0.25);
     --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+      rgba(0, 0, 0, 0.5) 0 10px 15px -3px, rgba(0, 0, 0, 0.3) 0 4px 6px -2px;
   }
 }
 
 [data-theme="dark"] {
-  --text: #9ca3af;
-  --text-h: #f3f4f6;
-  --bg: #16171d;
-  --border: #2e303a;
-  --code-bg: #1f2028;
-  --accent: #c084fc;
-  --accent-bg: rgba(192, 132, 252, 0.15);
-  --accent-border: rgba(192, 132, 252, 0.5);
-  --social-bg: rgba(47, 48, 58, 0.5);
+  --text: #c4a0b5;
+  --text-h: #f5ccd8;
+  --bg: #1e1e30;
+  --border: #d8979d;
+  --code-bg: #26203a;
+  --accent: #e15771;
+  --accent-bg: rgba(225, 87, 113, 0.15);
+  --accent-border: rgba(225, 87, 113, 0.45);
+  --social-bg: rgba(216, 151, 157, 0.25);
   --shadow:
-    rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+    rgba(0, 0, 0, 0.5) 0 10px 15px -3px, rgba(0, 0, 0, 0.3) 0 4px 6px -2px;
+}
+
+/* Dark theme button text color overrides */
+[data-theme="dark"] .btn--primary,
+[data-theme="dark"] .auth-btn,
+[data-theme="dark"] .follow-btn,
+[data-theme="dark"] .pagination__page--active,
+[data-theme="dark"] .avatar-picker__item--active::after {
+  color: #d5cbdb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .btn--primary,
+  :root:not([data-theme="light"]) .auth-btn,
+  :root:not([data-theme="light"]) .follow-btn,
+  :root:not([data-theme="light"]) .pagination__page--active,
+  :root:not([data-theme="light"]) .avatar-picker__item--active::after {
+    color: #d5cbdb;
+  }
 }
 
 body {
@@ -516,7 +535,7 @@ body {
   border-radius: 999px;
   border: 1px solid var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: #e5f6f4;
   font-size: 13px;
   font-weight: 600;
   font-family: var(--sans);
@@ -758,7 +777,7 @@ p {
   width: 100%;
   padding: 11px;
   background: var(--accent);
-  color: #fff;
+  color: #e5f6f4;
   border: none;
   border-radius: 8px;
   font-size: 15px;
@@ -855,7 +874,7 @@ p {
 
 .btn--primary {
   background: var(--accent);
-  color: #fff;
+  color: #e5f6f4;
 }
 
 .btn--primary:hover {
@@ -1305,7 +1324,7 @@ p {
 .pagination__page--active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: #e5f6f4;
   font-weight: 600;
   cursor: default;
 }
@@ -1570,7 +1589,7 @@ p {
   width: 16px;
   height: 16px;
   background: var(--accent);
-  color: white;
+  color: #e5f6f4;
   border-radius: 50%;
   font-size: 10px;
   font-weight: 700;
