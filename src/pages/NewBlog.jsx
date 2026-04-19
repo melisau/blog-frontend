@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import axiosInstance from '../api/axiosInstance'
+import RichTextEditor from '../components/RichTextEditor'
 
 const FALLBACK_CATEGORIES = ['Teknoloji', 'Genel', 'Yaşam', 'Eğitim', 'Spor', 'Seyahat', 'Yemek', 'Bilim']
   .map((name) => ({ id: name, name }))
@@ -298,14 +299,15 @@ export default function NewBlog() {
           {/* ── Content ── */}
           <div className="field-group">
             <label htmlFor="content" className="field-label">İçerik</label>
-            <textarea
+            <RichTextEditor
               id="content"
-              name="content"
-              rows={12}
               value={fields.content}
-              onChange={handleChange}
-              className={`field-input field-textarea${errors.content ? ' field-input--error' : ''}`}
+              onChange={(next) => {
+                setFields((prev) => ({ ...prev, content: next }))
+                if (errors.content) setErrors((prev) => ({ ...prev, content: '' }))
+              }}
               placeholder="Yazı içeriğini girin…"
+              hasError={Boolean(errors.content)}
             />
             <div className="field-hint">{fields.content.trim().length} karakter</div>
             {errors.content && <p className="field-error">{errors.content}</p>}

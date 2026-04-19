@@ -14,6 +14,7 @@ import { useParams, Link } from 'react-router-dom'
 import axiosInstance from '../api/axiosInstance'
 import { useAuth } from '../context/AuthContext'
 import Avatar, { AVATARS, getCachedIconId, saveAvatarCache } from '../components/Avatar'
+import { extractTags, toPlainExcerpt } from '../utils/blogText'
 
 // ── Data normalisers ──────────────────────────────────────────────────────────
 
@@ -41,15 +42,6 @@ function normalizeUser(raw) {
   }
 }
 
-// extractTags — same helper as in Home.jsx; converts any tag format to string[].
-function extractTags(b) {
-  const source = b.tags ?? b.tag_list ?? b.labels ?? b.keywords ?? []
-  const arr = Array.isArray(source) ? source : (source ? [source] : [])
-  return arr
-    .map((t) => (typeof t === 'string' ? t.trim() : (t?.name ?? t?.title ?? t?.label ?? null)))
-    .filter(Boolean)
-}
-
 // Converts a raw API blog (or list) into a uniform array.
 // Handles both a plain array and paginated { items, results, blogs, data } shapes.
 function normalizeBlogs(raw) {
@@ -67,10 +59,11 @@ function normalizeBlogs(raw) {
     return {
       id:       b.id,
       title:    b.title ?? b.name ?? b.headline ?? '(Başlıksız)',
-      excerpt:  b.excerpt ?? b.summary ?? (b.content ? b.content.slice(0, 120) + '…' : ''),
+      excerpt:  toPlainExcerpt(b.excerpt ?? b.summary ?? b.content ?? b.body ?? '', 120),
       date,
       category: typeof b.category === 'string' ? b.category : (b.category?.name ?? null),
       tags:     extractTags(b),
+      imageUrl: b.image_url ?? b.imageUrl ?? null,
     }
   })
 }
@@ -530,8 +523,12 @@ export default function Profile() {
           <div className="blog-grid">
             {blogs.map((blog) => (
               <Link key={blog.id} to={`/blogs/${blog.id}`} className="blog-card">
-                <div className="blog-card__thumb" />
+                {blog.imageUrl && (
+                  <img src={blog.imageUrl} alt={blog.title} className="blog-card__thumb" />
+                )}
                 <div className="blog-card__body">
+                  <h2 className="blog-card__title">{blog.title}</h2>
+                  <p className="blog-card__excerpt">{blog.excerpt}</p>
                   <div className="blog-card__tags">
                     {blog.category && (
                       <span className="blog-card__tag">{blog.category}</span>
@@ -543,8 +540,6 @@ export default function Profile() {
                       <span className="blog-card__tag">Genel</span>
                     )}
                   </div>
-                  <h2 className="blog-card__title">{blog.title}</h2>
-                  <p className="blog-card__excerpt">{blog.excerpt}</p>
                   <div className="blog-card__footer">
                     <span className="blog-card__date">{blog.date}</span>
                   </div>

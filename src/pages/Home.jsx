@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import BlogCard from '../components/BlogCard'
 import Pagination from '../components/Pagination'
 import SEO from '../components/SEO'
+import { extractTags, toPlainExcerpt } from '../utils/blogText'
 
 const POSTS_PER_PAGE = 6
 
@@ -18,14 +19,6 @@ function resolveImageUrl(url) {
   return `${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`
 }
 
-function extractTags(raw) {
-  const source = raw.tags ?? raw.tag_list ?? raw.labels ?? raw.keywords ?? []
-  const arr = Array.isArray(source) ? source : (source ? [source] : [])
-  return arr
-    .map((t) => (typeof t === 'string' ? t.trim() : (t?.name ?? t?.title ?? t?.label ?? null)))
-    .filter(Boolean)
-}
-
 function normalizeBlog(raw) {
   const dateRaw = raw.created_at ?? raw.createdAt ?? raw.date ?? null
   const date = dateRaw
@@ -33,9 +26,10 @@ function normalizeBlog(raw) {
     : ''
 
   const rawExcerpt = raw.excerpt ?? raw.summary ?? raw.description ?? raw.content ?? raw.body ?? ''
-  const excerpt = rawExcerpt.length > 150 ? rawExcerpt.slice(0, 150).trimEnd() + '…' : rawExcerpt
+  const excerpt = toPlainExcerpt(rawExcerpt, 150)
 
   const embeddedName = raw.author?.username ?? raw.author?.name ?? raw.author_name ?? raw.owner_name ?? null
+  const embeddedIconId = raw.author?.icon_id ?? raw.author?.iconId ?? raw.owner?.icon_id ?? null
 
   return {
     id:       raw.id,
@@ -45,12 +39,24 @@ function normalizeBlog(raw) {
     category: typeof raw.category === 'string' ? raw.category : (raw.category?.name ?? null),
     tags:     extractTags(raw),
     authorId: raw.author?.id ?? raw.author_id ?? null,
-    author:   embeddedName ? { username: embeddedName } : null,
+    author:   embeddedName ? { username: embeddedName, iconId: embeddedIconId } : null,
     imageUrl: resolveImageUrl(raw.cover_image_url ?? raw.image_url ?? raw.imageUrl ?? null),
   }
 }
 
-function extractPage(data, page, limit, category, tag) {
+function matchesQuery(blog, q) {
+  if (!q) return true
+  const query = q.toLocaleLowerCase('tr-TR')
+  const text = [
+    blog.title ?? '',
+    blog.excerpt ?? '',
+    typeof blog.category === 'string' ? blog.category : (blog.category?.name ?? ''),
+    ...extractTags(blog),
+  ].join(' ').toLocaleLowerCase('tr-TR')
+  return text.includes(query)
+}
+
+function extractPage(data, page, limit, category, tag, query) {
   if (Array.isArray(data)) {
     let filtered = data
     if (category) {
@@ -64,6 +70,9 @@ function extractPage(data, page, limit, category, tag) {
         const tags = extractTags(b)
         return tags.includes(tag)
       })
+    }
+    if (query) {
+      filtered = filtered.filter((b) => matchesQuery(normalizeBlog(b), query))
     }
 
     const start = (page - 1) * limit
@@ -91,12 +100,16 @@ export default function Home() {
 
   const activeCategory = searchParams.get('category')
   const activeTag      = searchParams.get('tag')
+  const query          = searchParams.get('q')?.trim() ?? ''
 
   const [blogs,      setBlogs]      = useState([])
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState('')
   const [page,       setPage]       = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [recentTags, setRecentTags] = useState([])
+  const [favoriteIds, setFavoriteIds] = useState(new Set())
+  const [favoriteLoadingId, setFavoriteLoadingId] = useState(null)
 
   // Fetch blogs on mount and when filters or page change
   useEffect(() => {
@@ -112,7 +125,7 @@ export default function Home() {
       .get('/blogs', { params })
       .then(async ({ data }) => {
         if (cancelled) return
-        const { blogs: list, totalPages: pages } = extractPage(data, page, POSTS_PER_PAGE, activeCategory, activeTag)
+        const { blogs: list, totalPages: pages } = extractPage(data, page, POSTS_PER_PAGE, activeCategory, activeTag, query)
         
         // Resolve author names for blogs that don't have them
         const missingUids = [...new Set(list.filter((b) => !b.author && b.authorId).map((b) => b.authorId))]
@@ -122,14 +135,22 @@ export default function Home() {
           try {
             const results = await Promise.all(missingUids.map((id) => axiosInstance.get(`/users/${id}`)))
             results.forEach(({ data: u }) => {
-              authorMap[u.id] = u.username ?? u.name ?? u.full_name ?? null
+              authorMap[u.id] = {
+                username: u.username ?? u.name ?? u.full_name ?? null,
+                iconId: u.icon_id ?? u.iconId ?? null,
+              }
             })
           } catch { /* fail silently */ }
         }
 
         setBlogs(list.map((b) => ({
           ...b,
-          author: b.author ?? (b.authorId && authorMap[b.authorId] ? { username: authorMap[b.authorId] } : null)
+          author: b.author ?? (b.authorId && authorMap[b.authorId]
+            ? {
+                username: authorMap[b.authorId].username,
+                iconId: authorMap[b.authorId].iconId,
+              }
+            : null),
         })))
         setTotalPages(pages)
       })
@@ -137,10 +158,71 @@ export default function Home() {
       .finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
-  }, [page, activeCategory, activeTag])
+  }, [page, activeCategory, activeTag, query])
 
   // Reset to first page when filters change
-  useEffect(() => { setPage(1) }, [activeCategory, activeTag])
+  useEffect(() => { setPage(1) }, [activeCategory, activeTag, query])
+
+  useEffect(() => {
+    let cancelled = false
+    axiosInstance
+      .get('/blogs', { params: { page: 1, limit: 100 } })
+      .then(({ data }) => {
+        if (cancelled) return
+        const list = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.blogs ?? data?.posts ?? data?.data ?? [])
+        const counts = new Map()
+        list.forEach((b) => {
+          extractTags(b).forEach((tag) => {
+            counts.set(tag, (counts.get(tag) ?? 0) + 1)
+          })
+        })
+        const stableTags = Array.from(counts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .map(([tag]) => tag)
+        setRecentTags(stableTags)
+      })
+      .catch(() => { /* silent fail */ })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setFavoriteIds(new Set())
+      return
+    }
+    let cancelled = false
+    axiosInstance
+      .get('/users/me/favorites')
+      .then(({ data }) => {
+        if (cancelled) return
+        const list = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.data ?? [])
+        setFavoriteIds(new Set(list.map((b) => String(b.id))))
+      })
+      .catch(() => { /* silent fail */ })
+    return () => { cancelled = true }
+  }, [isAuthenticated])
+
+  async function handleToggleFavorite(blogId) {
+    if (!isAuthenticated || favoriteLoadingId) return
+    const key = String(blogId)
+    const currentlyFavorited = favoriteIds.has(key)
+    setFavoriteLoadingId(blogId)
+    try {
+      if (currentlyFavorited) {
+        await axiosInstance.delete(`/users/me/favorites/${blogId}`)
+        setFavoriteIds((prev) => {
+          const next = new Set(prev)
+          next.delete(key)
+          return next
+        })
+      } else {
+        await axiosInstance.post(`/users/me/favorites/${blogId}`)
+        setFavoriteIds((prev) => new Set(prev).add(key))
+      }
+    } catch { /* toast interceptor handles */ }
+    finally { setFavoriteLoadingId(null) }
+  }
 
   return (
     <div className="page-container">
@@ -149,48 +231,84 @@ export default function Home() {
         description="En son yazıları keşfedin ve topluluğumuza katılın."
       />
       {/* ── Filter Status ── */}
-      {(activeCategory || activeTag) && (
+      {(activeCategory || activeTag || query) && (
         <div className="filter-bar">
           <span className="filter-bar__label">
-            {activeCategory ? `Kategori: ${activeCategory}` : `Etiket: #${activeTag}`}
+            {activeCategory
+              ? `Kategori: ${activeCategory}`
+              : activeTag
+                ? `Etiket: #${activeTag}`
+                : `Arama: "${query}"`}
           </span>
           <Link to="/" className="filter-bar__clear">Filtreyi Temizle</Link>
         </div>
       )}
 
-      {/* ── Content ── */}
-      {loading ? (
-        <div className="blog-grid">
-          {Array.from({ length: POSTS_PER_PAGE }).map((_, i) => (
-            <div key={i} className="blog-card blog-card--skeleton">
-              <div className="blog-card__thumb skeleton-block" />
-              <div className="blog-card__body">
-                <div className="skeleton-line skeleton-line--short" />
-                <div className="skeleton-line" />
-                <div className="skeleton-line skeleton-line--long" />
-              </div>
+      <div className="home-layout">
+        <div className="home-content">
+          {/* ── Content ── */}
+          {loading ? (
+            <div className="blog-grid">
+              {Array.from({ length: POSTS_PER_PAGE }).map((_, i) => (
+                <div key={i} className="blog-card blog-card--skeleton">
+                  <div className="blog-card__thumb skeleton-block" />
+                  <div className="blog-card__body">
+                    <div className="skeleton-line skeleton-line--short" />
+                    <div className="skeleton-line" />
+                    <div className="skeleton-line skeleton-line--long" />
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      ) : error ? (
-        <div className="auth-server-error" role="alert">{error}</div>
-      ) : blogs.length === 0 ? (
-        <div className="comments-empty">
-          Henüz hiç yazı yok.{' '}
-          {isAuthenticated && (
-            <Link to="/new-blog" className="auth-link">İlk yazıyı siz oluşturun →</Link>
+          ) : error ? (
+            <div className="auth-server-error" role="alert">{error}</div>
+          ) : blogs.length === 0 ? (
+            <div className="comments-empty">
+              Henüz hiç yazı yok.{' '}
+              {isAuthenticated && (
+                <Link to="/new-blog" className="auth-link">İlk yazıyı siz oluşturun →</Link>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="blog-grid">
+                {blogs.map((blog) => (
+                  <BlogCard
+                    key={blog.id}
+                    blog={blog}
+                    isAuthenticated={isAuthenticated}
+                    isFavorited={favoriteIds.has(String(blog.id))}
+                    favoriteLoading={favoriteLoadingId === blog.id}
+                    onToggleFavorite={handleToggleFavorite}
+                  />
+                ))}
+              </div>
+              <Pagination page={page} totalPages={totalPages} setPage={setPage} />
+            </>
           )}
         </div>
-      ) : (
-        <>
-          <div className="blog-grid">
-            {blogs.map((blog) => (
-              <BlogCard key={blog.id} blog={blog} />
-            ))}
+
+        <aside className="tags-sidebar" aria-label="Güncel etiketler">
+          <div className="tags-sidebar__inner">
+            <h2 className="tags-sidebar__title">Güncel Etiketler</h2>
+            {recentTags.length > 0 ? (
+              <div className="tags-sidebar__list">
+                {recentTags.map((tag) => (
+                  <Link
+                    key={tag}
+                    to={`/?tag=${encodeURIComponent(tag)}`}
+                    className="tags-sidebar__tag tags-sidebar__tag--link"
+                  >
+                    #{tag}
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="tags-sidebar__empty">Etiketler burada görünecek.</p>
+            )}
           </div>
-          <Pagination page={page} totalPages={totalPages} setPage={setPage} />
-        </>
-      )}
+        </aside>
+      </div>
     </div>
   )
 }

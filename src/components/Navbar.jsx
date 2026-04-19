@@ -2,7 +2,7 @@
 // Authenticated:  [Hamburger(mobile)]  [Logo]  ···  [+]  [Avatar ▾]
 // Guest:          [Hamburger(mobile)]  [Logo]  ···  [Giriş Yap]  [Kayıt Ol]
 import { useState, useRef, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useSidebar } from '../context/SidebarContext'
 import { useTheme } from '../context/ThemeContext'
@@ -56,17 +56,30 @@ export default function Navbar() {
   const { toggle: toggleSidebar } = useSidebar()
   const { theme, toggle: toggleTheme } = useTheme()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
   const wrapRef = useRef(null)
 
   const displayName = user?.username ?? user?.name ?? user?.full_name ?? null
   const maskedEmail = maskEmail(user?.email ?? null)
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    setSearch(params.get('q') ?? '')
+  }, [location.search])
+
   function handleLogout() {
     setOpen(false)
     logout()
     navigate('/')
+  }
+
+  function handleSearchSubmit(e) {
+    e.preventDefault()
+    const q = search.trim()
+    navigate(q ? `/?q=${encodeURIComponent(q)}` : '/')
   }
 
   // Close dropdown when clicking outside
@@ -110,6 +123,16 @@ export default function Navbar() {
         </svg>
         Fitbook
       </Link>
+
+      <form className="navbar__search" onSubmit={handleSearchSubmit} role="search" aria-label="Yazılarda ara">
+        <input
+          type="search"
+          className="navbar__search-input"
+          placeholder="Yazılarda ara..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </form>
 
       {/* ── Right side ────────────────────────────────────────── */}
       {isAuthenticated ? (
@@ -181,6 +204,11 @@ export default function Navbar() {
                     <div className="navbar__dd-email">{maskedEmail}</div>
                   )}
 
+                  <div className="navbar__dd-theme">
+                    <span className="navbar__dd-theme-label">Tema</span>
+                    <ThemeToggleBtn theme={theme} toggleTheme={toggleTheme} />
+                  </div>
+
                   <div className="navbar__dd-divider" />
 
                   {/* Sign out */}
@@ -202,8 +230,6 @@ export default function Navbar() {
             </span>
           )}
 
-          {/* Theme toggle — inside navbar__right for auth users */}
-          <ThemeToggleBtn theme={theme} toggleTheme={toggleTheme} />
         </div>
       ) : (
         <div className="navbar__auth">

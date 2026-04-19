@@ -6,11 +6,13 @@
 //   GET /blogs/{id}    → pre-populate form
 //   GET /categories    → populate category dropdown
 //   PUT /blogs/{id}    → save changes
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import axiosInstance from '../api/axiosInstance'
+import RichTextEditor from '../components/RichTextEditor'
 
 const FALLBACK_CATEGORIES = ['Teknoloji', 'Genel', 'Yaşam', 'Eğitim', 'Spor', 'Seyahat', 'Yemek', 'Bilim']
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
 
 function validate(fields) {
   const errors = {}
@@ -26,7 +28,7 @@ export default function EditBlog() {
   const { id } = useParams()
   const navigate = useNavigate()
 
-  const [fields, setFields] = useState({ title: '', category: '', content: '', image_url: '' })
+  const [fields, setFields] = useState({ title: '', category: '', content: '' })
   const [errors, setErrors] = useState({})
   const [serverError, setServerError] = useState('')
   const [loading,  setLoading]  = useState(false)
@@ -34,22 +36,42 @@ export default function EditBlog() {
 
   const [categories,        setCategories]        = useState([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
+  const [coverFile, setCoverFile] = useState(null)
+  const [coverPreview, setCoverPreview] = useState(null)
+  const [coverError, setCoverError] = useState('')
+  const [coverRemoved, setCoverRemoved] = useState(false)
+  const [initialImageUrl, setInitialImageUrl] = useState('')
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef(null)
+
+  function isObjectUrl(url) {
+    return typeof url === 'string' && url.startsWith('blob:')
+  }
 
   // Fetch the existing blog to pre-populate the form.
   useEffect(() => {
     axiosInstance
       .get(`/blogs/${id}`)
       .then(({ data }) => {
+        const imageUrl = data.cover_image_url ?? data.image_url ?? data.imageUrl ?? ''
         setFields({
           title:     data.title     ?? '',
           category:  data.category  ?? data.tag ?? '',
           content:   data.content   ?? data.body ?? '',
-          image_url: data.image_url ?? data.imageUrl ?? '',
         })
+        setInitialImageUrl(imageUrl)
+        setCoverPreview(imageUrl || null)
+        setCoverRemoved(false)
       })
       .catch(() => setServerError('Yazı yüklenemedi.'))
       .finally(() => setFetching(false))
   }, [id])
+
+  useEffect(() => {
+    return () => {
+      if (isObjectUrl(coverPreview)) URL.revokeObjectURL(coverPreview)
+    }
+  }, [coverPreview])
 
   // Fetch categories from GET /categories; fall back to hardcoded list.
   useEffect(() => {
@@ -70,6 +92,53 @@ export default function EditBlog() {
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }))
   }
 
+  const applyFile = useCallback((file) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setCoverError('Yalnızca resim dosyaları kabul edilir.')
+      return
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      setCoverError('Dosya boyutu en fazla 5 MB olabilir.')
+      return
+    }
+
+    setCoverError('')
+    if (isObjectUrl(coverPreview)) URL.revokeObjectURL(coverPreview)
+    setCoverFile(file)
+    setCoverPreview(URL.createObjectURL(file))
+    setCoverRemoved(false)
+  }, [coverPreview])
+
+  function removeCover() {
+    if (isObjectUrl(coverPreview)) URL.revokeObjectURL(coverPreview)
+    setCoverFile(null)
+    setCoverPreview(null)
+    setCoverRemoved(true)
+    setCoverError('')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  function handleFileChange(e) {
+    applyFile(e.target.files?.[0])
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  function handleDragLeave(e) {
+    e.preventDefault()
+    setIsDragging(false)
+  }
+
+  function handleDrop(e) {
+    e.preventDefault()
+    setIsDragging(false)
+    applyFile(e.dataTransfer.files?.[0])
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     const validationErrors = validate(fields)
@@ -80,12 +149,23 @@ export default function EditBlog() {
     setLoading(true)
     setServerError('')
     try {
-      await axiosInstance.put(`/blogs/${id}`, {
-        title:     fields.title,
-        category:  fields.category,
-        content:   fields.content,
-        image_url: fields.image_url,
-      })
+      if (coverFile) {
+        const fd = new FormData()
+        fd.append('title', fields.title.trim())
+        fd.append('category', fields.category)
+        fd.append('content', fields.content.trim())
+        fd.append('cover_image', coverFile)
+        await axiosInstance.put(`/blogs/${id}`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+      } else {
+        await axiosInstance.put(`/blogs/${id}`, {
+          title: fields.title.trim(),
+          category: fields.category,
+          content: fields.content.trim(),
+          image_url: coverRemoved ? '' : initialImageUrl,
+        })
+      }
       navigate(`/blogs/${id}`)
     } catch (err) {
       setServerError(
@@ -139,21 +219,62 @@ export default function EditBlog() {
             {errors.title && <p className="field-error">{errors.title}</p>}
           </div>
 
-          {/* ── Image URL ─────────────────────────────────────────── */}
+          {/* ── Cover Image ───────────────────────────────────────── */}
           <div className="field-group">
-            <label htmlFor="image_url" className="field-label">
-              Kapak Görseli URL
+            <label className="field-label">
+              Kapak Görseli
               <span className="field-label__optional"> (isteğe bağlı)</span>
             </label>
+
             <input
-              id="image_url"
-              name="image_url"
-              type="url"
-              value={fields.image_url}
-              onChange={handleChange}
-              className="field-input"
-              placeholder="https://example.com/image.jpg"
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              style={{ display: 'none' }}
+              tabIndex={-1}
             />
+
+            {coverPreview ? (
+              <div className="cover-upload-zone__preview">
+                <img src={coverPreview} alt="Kapak önizlemesi" />
+                <button
+                  type="button"
+                  className="cover-upload-zone__remove"
+                  onClick={removeCover}
+                  aria-label="Görseli kaldır"
+                >
+                  ×
+                </button>
+              </div>
+            ) : (
+              <div
+                className={`cover-upload-zone${isDragging ? ' cover-upload-zone--dragging' : ''}`}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
+                aria-label="Kapak görseli yükle"
+              >
+                <div className="cover-upload-zone__placeholder">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                  <span className="cover-upload-zone__text">
+                    Görseli buraya sürükleyin veya
+                    <span className="cover-upload-zone__link"> dosya seçin</span>
+                  </span>
+                  <span className="cover-upload-zone__hint">PNG, JPG, WEBP · Maks. 5 MB</span>
+                </div>
+              </div>
+            )}
+
+            {coverError && <p className="field-error">{coverError}</p>}
           </div>
 
           {/* ── Category ───────────────────────────────────────────── */}
@@ -180,14 +301,15 @@ export default function EditBlog() {
           {/* ── Content ────────────────────────────────────────────── */}
           <div className="field-group">
             <label htmlFor="content" className="field-label">İçerik</label>
-            <textarea
+            <RichTextEditor
               id="content"
-              name="content"
-              rows={12}
               value={fields.content}
-              onChange={handleChange}
-              className={`field-input field-textarea${errors.content ? ' field-input--error' : ''}`}
+              onChange={(next) => {
+                setFields((prev) => ({ ...prev, content: next }))
+                if (errors.content) setErrors((prev) => ({ ...prev, content: '' }))
+              }}
               placeholder="Yazı içeriğini girin…"
+              hasError={Boolean(errors.content)}
             />
             <div className="field-hint">{fields.content.trim().length} karakter</div>
             {errors.content && <p className="field-error">{errors.content}</p>}

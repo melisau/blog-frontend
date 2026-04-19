@@ -3,16 +3,9 @@ import { Link } from 'react-router-dom'
 import axiosInstance from '../api/axiosInstance'
 import { useAuth } from '../context/AuthContext'
 import SEO from '../components/SEO'
+import { extractTags, toPlainExcerpt } from '../utils/blogText'
 
 // ── Normaliser ────────────────────────────────────────────────────────────────
-
-function extractTags(raw) {
-  const source = raw.tags ?? raw.tag_list ?? raw.labels ?? raw.keywords ?? []
-  const arr = Array.isArray(source) ? source : (source ? [source] : [])
-  return arr
-    .map((t) => (typeof t === 'string' ? t.trim() : (t?.name ?? t?.title ?? t?.label ?? null)))
-    .filter(Boolean)
-}
 
 function normalizeBlog(raw) {
   const dateRaw = raw.created_at ?? raw.createdAt ?? raw.date ?? null
@@ -20,7 +13,7 @@ function normalizeBlog(raw) {
     ? new Date(dateRaw).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
     : ''
   const rawExcerpt = raw.excerpt ?? raw.summary ?? raw.content ?? raw.body ?? ''
-  const excerpt = rawExcerpt.length > 150 ? rawExcerpt.slice(0, 150).trimEnd() + '…' : rawExcerpt
+  const excerpt = toPlainExcerpt(rawExcerpt, 150)
   return {
     id:       raw.id,
     title:    raw.title ?? '(Başlıksız)',
@@ -100,12 +93,34 @@ export default function Library() {
         <div className="blog-grid">
           {blogs.map((blog) => (
             <article key={blog.id} className="blog-card library-card">
-              {blog.imageUrl ? (
+              <button
+                className="blog-card__favorite blog-card__favorite--active"
+                onClick={() => handleRemove(blog.id)}
+                disabled={removing === blog.id}
+                title="Favorilerden çıkar"
+                aria-label="Favorilerden çıkar"
+              >
+                {removing === blog.id ? (
+                  '…'
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24"
+                    fill="currentColor"
+                    stroke="currentColor" strokeWidth="2"
+                    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                  </svg>
+                )}
+              </button>
+              {blog.imageUrl && (
                 <img src={blog.imageUrl} alt={blog.title} className="blog-card__thumb" />
-              ) : (
-                <div className="blog-card__thumb" />
               )}
               <div className="blog-card__body">
+                <h2 className="blog-card__title">
+                  <Link to={`/blogs/${blog.id}`} className="library-card__title-link">
+                    {blog.title}
+                  </Link>
+                </h2>
+                <p className="blog-card__excerpt">{blog.excerpt}</p>
                 <div className="blog-card__tags">
                   {blog.category && (
                     <span className="blog-card__tag">{blog.category}</span>
@@ -118,31 +133,8 @@ export default function Library() {
                   )}
                 </div>
 
-                <h2 className="blog-card__title">
-                  <Link to={`/blogs/${blog.id}`} className="library-card__title-link">
-                    {blog.title}
-                  </Link>
-                </h2>
-                <p className="blog-card__excerpt">{blog.excerpt}</p>
-
                 <div className="blog-card__footer">
                   <span className="blog-card__date">{blog.date}</span>
-                  <button
-                    className="library-card__remove"
-                    onClick={() => handleRemove(blog.id)}
-                    disabled={removing === blog.id}
-                    title="Kütüphaneden kaldır"
-                    aria-label="Kütüphaneden kaldır"
-                  >
-                    {removing === blog.id ? (
-                      '…'
-                    ) : (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"
-                        stroke="none" aria-hidden="true">
-                        <path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z"/>
-                      </svg>
-                    )}
-                  </button>
                 </div>
 
                 <Link to={`/blogs/${blog.id}`} className="blog-card__read">

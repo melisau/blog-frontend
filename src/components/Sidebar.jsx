@@ -1,4 +1,6 @@
 import { NavLink } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useSidebar } from '../context/SidebarContext'
 
@@ -39,6 +41,9 @@ const FollowingIcon = () => (
 export default function Sidebar() {
   const { isAuthenticated, user } = useAuth()
   const { mobileOpen, close } = useSidebar()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [search, setSearch] = useState('')
 
   const profilePath = isAuthenticated && user?.id
     ? `/profile/${user.id}`
@@ -51,6 +56,18 @@ export default function Sidebar() {
     { label: 'Following', path: '/following', icon: <FollowingIcon />, end: false },
   ]
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    setSearch(params.get('q') ?? '')
+  }, [location.search])
+
+  function handleSearchSubmit(e) {
+    e.preventDefault()
+    const q = search.trim()
+    navigate(q ? `/?q=${encodeURIComponent(q)}` : '/')
+    close()
+  }
+
   return (
     <>
       {/* Mobile backdrop */}
@@ -59,6 +76,15 @@ export default function Sidebar() {
       )}
 
       <nav className={`sidebar${mobileOpen ? ' sidebar--open' : ''}`} aria-label="Ana menü">
+        <form className="sidebar__search" onSubmit={handleSearchSubmit} role="search" aria-label="Yazılarda ara">
+          <input
+            type="search"
+            className="sidebar__search-input"
+            placeholder="Yazılarda ara..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </form>
         <ul className="sidebar__list">
           {items.map(({ label, path, icon, end }) => (
             <li key={label}>
