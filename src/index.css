@@ -1660,6 +1660,25 @@ p {
   margin-top: 4px;
 }
 
+.blog-card__stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-right: auto;
+}
+
+.blog-card__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.blog-card__stat svg {
+  opacity: 0.8;
+}
+
 .blog-card__author-row {
   display: flex;
   align-items: center;

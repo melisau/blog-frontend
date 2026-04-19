@@ -41,6 +41,8 @@ function normalizeBlog(raw) {
     authorId: raw.author?.id ?? raw.author_id ?? null,
     author:   embeddedName ? { username: embeddedName, iconId: embeddedIconId } : null,
     imageUrl: resolveImageUrl(raw.cover_image_url ?? raw.image_url ?? raw.imageUrl ?? null),
+    favoriteCount: raw.favorite_count ?? raw.favorites_count ?? raw.like_count ?? raw.likes_count ?? 0,
+    commentCount: raw.comment_count ?? raw.comments_count ?? 0,
   }
 }
 

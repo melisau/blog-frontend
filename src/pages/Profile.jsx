@@ -14,6 +14,7 @@ import { useParams, Link } from 'react-router-dom'
 import axiosInstance from '../api/axiosInstance'
 import { useAuth } from '../context/AuthContext'
 import Avatar, { AVATARS, getCachedIconId, saveAvatarCache } from '../components/Avatar'
+import BlogCardStats from '../components/BlogCardStats'
 import { extractTags, toPlainExcerpt } from '../utils/blogText'
 
 // ── Data normalisers ──────────────────────────────────────────────────────────
@@ -64,6 +65,8 @@ function normalizeBlogs(raw) {
       category: typeof b.category === 'string' ? b.category : (b.category?.name ?? null),
       tags:     extractTags(b),
       imageUrl: b.image_url ?? b.imageUrl ?? null,
+      favoriteCount: b.favorite_count ?? b.favorites_count ?? b.like_count ?? b.likes_count ?? 0,
+      commentCount: b.comment_count ?? b.comments_count ?? 0,
     }
   })
 }
@@ -541,6 +544,7 @@ export default function Profile() {
                     )}
                   </div>
                   <div className="blog-card__footer">
+                    <BlogCardStats favoriteCount={blog.favoriteCount ?? 0} commentCount={blog.commentCount ?? 0} />
                     <span className="blog-card__date">{blog.date}</span>
                   </div>
                   <span className="blog-card__read">Devamını Oku →</span>
