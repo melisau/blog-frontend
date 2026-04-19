@@ -566,13 +566,13 @@ body {
 @media (min-width: 769px) {
   .home-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 260px;
-    gap: 28px;
+    grid-template-columns: minmax(0, 1fr) 200px;
+    gap: 14px;
     align-items: stretch;
   }
 
   .home-content .blog-grid {
-    max-width: 760px;
+    max-width: 900px;
   }
 
   .tags-sidebar {
@@ -580,7 +580,7 @@ body {
     min-height: 100%;
     border-left: 1px solid var(--border);
     border-radius: 0;
-    padding-left: 20px;
+    padding-left: 10px;
   }
 
   .tags-sidebar__inner {
@@ -666,9 +666,9 @@ body {
   background: var(--accent-bg);
 }
 .favorite-btn--active {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-bg);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.1);
 }
 .favorite-btn:disabled {
   opacity: 0.6;
