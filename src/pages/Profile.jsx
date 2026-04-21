@@ -291,7 +291,15 @@ export default function Profile() {
 
       {/* ── User info card ─────────────────────────────────────────────── */}
       {userLoading ? (
-        <LoadingSpinner />
+        <div className="profile-card">
+          <div className="skeleton-block" style={{ width: 72, height: 72, borderRadius: '50%', flexShrink: 0 }} />
+          <div className="profile-info">
+            <div className="skeleton-line skeleton-line--short" style={{ height: 20 }} />
+            <div className="skeleton-line skeleton-line--long" />
+            <div className="skeleton-line" style={{ width: '60%' }} />
+            <LoadingSpinner size="sm" centered={false} />
+          </div>
+        </div>
 
       ) : editMode ? (
         /* ── Edit form ──────────────────────────────────────────────────── */
@@ -497,7 +505,21 @@ export default function Profile() {
         )}
 
         {blogsLoading ? (
-          <LoadingSpinner />
+          <>
+            <div className="blog-grid">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="blog-card blog-card--skeleton">
+                  <div className="blog-card__thumb skeleton-block" />
+                  <div className="blog-card__body">
+                    <div className="skeleton-line skeleton-line--short" />
+                    <div className="skeleton-line" />
+                    <div className="skeleton-line skeleton-line--long" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <LoadingSpinner size="sm" />
+          </>
         ) : blogs.length === 0 && !blogsError ? (
           <div className="comments-empty">
             {isOwnProfile
