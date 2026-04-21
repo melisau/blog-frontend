@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import SEO from '../components/SEO'
 import HeartIcon from '../components/icons/HeartIcon'
 import BlogCardStats from '../components/BlogCardStats'
+import LoadingSpinner from '../components/LoadingSpinner'
 import { extractTags, toPlainExcerpt } from '../utils/blogText'
 
 // ── Normaliser ────────────────────────────────────────────────────────────────
@@ -83,18 +84,7 @@ export default function Library() {
       <h1 className="library-title">Kütüphanem</h1>
 
       {loading ? (
-        <div className="blog-grid">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="blog-card blog-card--skeleton">
-              <div className="blog-card__thumb skeleton-block" />
-              <div className="blog-card__body">
-                <div className="skeleton-line skeleton-line--short" />
-                <div className="skeleton-line" />
-                <div className="skeleton-line skeleton-line--long" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <LoadingSpinner />
       ) : error ? (
         <div className="auth-server-error" role="alert">{error}</div>
       ) : blogs.length === 0 ? (

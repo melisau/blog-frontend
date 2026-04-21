@@ -15,6 +15,7 @@ import axiosInstance from '../api/axiosInstance'
 import { useAuth } from '../context/AuthContext'
 import Avatar, { AVATARS, getCachedIconId, saveAvatarCache } from '../components/Avatar'
 import BlogCardStats from '../components/BlogCardStats'
+import LoadingSpinner from '../components/LoadingSpinner'
 import { extractTags, toPlainExcerpt } from '../utils/blogText'
 
 // ── Data normalisers ──────────────────────────────────────────────────────────
@@ -290,14 +291,7 @@ export default function Profile() {
 
       {/* ── User info card ─────────────────────────────────────────────── */}
       {userLoading ? (
-        <div className="profile-card">
-          <div className="skeleton-block" style={{ width: 72, height: 72, borderRadius: '50%', flexShrink: 0 }} />
-          <div className="profile-info">
-            <div className="skeleton-line skeleton-line--short" style={{ height: 20 }} />
-            <div className="skeleton-line skeleton-line--long" />
-            <div className="skeleton-line" style={{ width: '60%' }} />
-          </div>
-        </div>
+        <LoadingSpinner />
 
       ) : editMode ? (
         /* ── Edit form ──────────────────────────────────────────────────── */
@@ -503,18 +497,7 @@ export default function Profile() {
         )}
 
         {blogsLoading ? (
-          <div className="blog-grid">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="blog-card blog-card--skeleton">
-                <div className="blog-card__thumb skeleton-block" />
-                <div className="blog-card__body">
-                  <div className="skeleton-line skeleton-line--short" />
-                  <div className="skeleton-line" />
-                  <div className="skeleton-line skeleton-line--long" />
-                </div>
-              </div>
-            ))}
-          </div>
+          <LoadingSpinner />
         ) : blogs.length === 0 && !blogsError ? (
           <div className="comments-empty">
             {isOwnProfile

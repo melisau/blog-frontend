@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import axiosInstance from '../api/axiosInstance'
 import { useAuth } from '../context/AuthContext'
 import BlogCard from '../components/BlogCard'
 import SEO from '../components/SEO'
+import LoadingSpinner from '../components/LoadingSpinner'
 import { extractTags, toPlainExcerpt } from '../utils/blogText'
+/** @typedef {import('../types/blog').BlogResponse} BlogResponse */
 
 // ── Normalisers ──────────────────────────────────────────────────────────────
 
@@ -43,44 +45,21 @@ function normalizeBlog(raw) {
   }
 }
 
-function matchesQuery(blog, q) {
-  if (!q) return true
-  const query = q.toLocaleLowerCase('tr-TR')
-  const text = [
-    blog.title ?? '',
-    blog.excerpt ?? '',
-    typeof blog.category === 'string' ? blog.category : (blog.category?.name ?? ''),
-    ...extractTags(blog),
-  ].join(' ').toLocaleLowerCase('tr-TR')
-  return text.includes(query)
-}
-
-function extractBlogs(data, category, tag, query) {
+function extractBlogs(data) {
   let list = []
   if (Array.isArray(data)) {
     list = data
   } else {
     list = data.items ?? data.results ?? data.blogs ?? data.posts ?? data.data ?? data.content ?? []
   }
-
-  let blogs = list.map(normalizeBlog)
-
-  if (category) {
-    blogs = blogs.filter((b) => b.category === category)
-  }
-  if (tag) {
-    blogs = blogs.filter((b) => b.tags.includes(tag))
-  }
-  if (query) {
-    blogs = blogs.filter((b) => matchesQuery(b, query))
-  }
-
-  return blogs
+  return list.map(normalizeBlog)
 }
 
 // ── Page Component ───────────────────────────────────────────────────────────
 
 export default function Home() {
+  const BATCH_SIZE = 6
+
   const [searchParams] = useSearchParams()
   const { isAuthenticated } = useAuth()
 
@@ -90,59 +69,126 @@ export default function Home() {
 
   const [blogs,      setBlogs]      = useState([])
   const [loading,    setLoading]    = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error,      setError]      = useState('')
   const [recentTags, setRecentTags] = useState([])
   const [favoriteIds, setFavoriteIds] = useState(new Set())
   const [favoriteLoadingId, setFavoriteLoadingId] = useState(null)
+  const [hasMore, setHasMore] = useState(true)
 
-  // Fetch blogs on mount and when filters change
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
+  const observerRef = useRef(null)
+  const loadMoreRef = useRef(null)
+  const skipRef = useRef(0)
+  const isLoadingRef = useRef(false)
+  const hasMoreRef = useRef(true)
+
+  const hydrateAuthors = useCallback(async (list) => {
+    const missingUids = [...new Set(list.filter((b) => !b.author && b.authorId).map((b) => b.authorId))]
+    if (missingUids.length === 0) return list
+
+    const authorMap = {}
+    try {
+      const results = await Promise.all(missingUids.map((id) => axiosInstance.get(`/users/${id}`)))
+      results.forEach(({ data: u }) => {
+        authorMap[u.id] = {
+          username: u.username ?? u.name ?? u.full_name ?? null,
+          iconId: u.icon_id ?? u.iconId ?? null,
+        }
+      })
+    } catch {
+      // Yazar çözümleme başarısızsa kartlar yazarsız gösterilir.
+    }
+
+    return list.map((b) => ({
+      ...b,
+      author: b.author ?? (b.authorId && authorMap[b.authorId]
+        ? {
+            username: authorMap[b.authorId].username,
+            iconId: authorMap[b.authorId].iconId,
+          }
+        : null),
+    }))
+  }, [])
+
+  const fetchBlogs = useCallback(async ({ reset = false } = {}) => {
+    if (isLoadingRef.current) return
+    if (!reset && !hasMoreRef.current) return
+
+    isLoadingRef.current = true
     setError('')
 
-    const params = {}
-    if (activeCategory) params.category = activeCategory
-    if (activeTag)      params.tag = activeTag
-    if (query)          params.q = query
+    if (reset) {
+      setLoading(true)
+      setLoadingMore(false)
+      setHasMore(true)
+      hasMoreRef.current = true
+      skipRef.current = 0
+    } else {
+      setLoadingMore(true)
+    }
 
-    axiosInstance
-      .get('/blogs', { params })
-      .then(async ({ data }) => {
-        if (cancelled) return
-        const list = extractBlogs(data, activeCategory, activeTag, query)
-        
-        // Resolve author names for blogs that don't have them
-        const missingUids = [...new Set(list.filter((b) => !b.author && b.authorId).map((b) => b.authorId))]
-        const authorMap = {}
-        
-        if (missingUids.length > 0) {
-          try {
-            const results = await Promise.all(missingUids.map((id) => axiosInstance.get(`/users/${id}`)))
-            results.forEach(({ data: u }) => {
-              authorMap[u.id] = {
-                username: u.username ?? u.name ?? u.full_name ?? null,
-                iconId: u.icon_id ?? u.iconId ?? null,
-              }
-            })
-          } catch { /* fail silently */ }
-        }
+    try {
+      const params = {
+        skip: reset ? 0 : skipRef.current,
+        limit: BATCH_SIZE,
+      }
+      if (activeCategory) params.category = activeCategory
+      if (activeTag) params.tag = activeTag
+      if (query) params.q = query
 
-        setBlogs(list.map((b) => ({
-          ...b,
-          author: b.author ?? (b.authorId && authorMap[b.authorId]
-            ? {
-                username: authorMap[b.authorId].username,
-                iconId: authorMap[b.authorId].iconId,
-              }
-            : null),
-        })))
+      /** @type {{ data: BlogResponse | any[] }} */
+      const { data } = await axiosInstance.get('/blogs', { params })
+      const rawList = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.blogs ?? data?.posts ?? data?.data ?? data?.content ?? [])
+      const normalized = await hydrateAuthors(extractBlogs(data))
+
+      setBlogs((prev) => {
+        if (reset) return normalized
+        const seen = new Set(prev.map((item) => String(item.id)))
+        const next = [...prev]
+        normalized.forEach((item) => {
+          const id = String(item.id)
+          if (!seen.has(id)) {
+            seen.add(id)
+            next.push(item)
+          }
+        })
+        return next
       })
-      .catch(() => { if (!cancelled) setError('Yazılar yüklenemedi. Lütfen sayfayı yenileyin.') })
-      .finally(() => { if (!cancelled) setLoading(false) })
 
-    return () => { cancelled = true }
-  }, [activeCategory, activeTag, query])
+      const nextHasMore = rawList.length === BATCH_SIZE
+      setHasMore(nextHasMore)
+      hasMoreRef.current = nextHasMore
+      skipRef.current = (reset ? 0 : skipRef.current) + BATCH_SIZE
+    } catch {
+      setError('Bloglar yüklenemedi. Lütfen tekrar deneyin.')
+    } finally {
+      setLoading(false)
+      setLoadingMore(false)
+      isLoadingRef.current = false
+    }
+  }, [activeCategory, activeTag, query, hydrateAuthors])
+
+  useEffect(() => {
+    fetchBlogs({ reset: true })
+  }, [fetchBlogs])
+
+  useEffect(() => {
+    if (loading || !hasMore || error) return
+    if (!loadMoreRef.current) return
+
+    observerRef.current?.disconnect()
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !isLoadingRef.current) {
+          fetchBlogs({ reset: false })
+        }
+      },
+      { rootMargin: '140px 0px' }
+    )
+    observerRef.current.observe(loadMoreRef.current)
+
+    return () => observerRef.current?.disconnect()
+  }, [fetchBlogs, hasMore, loading, error])
 
   useEffect(() => {
     let cancelled = false
@@ -251,18 +297,26 @@ export default function Home() {
               )}
             </div>
           ) : (
-            <div className="blog-grid">
-              {blogs.map((blog) => (
-                <BlogCard
-                  key={blog.id}
-                  blog={blog}
-                  isAuthenticated={isAuthenticated}
-                  isFavorited={favoriteIds.has(String(blog.id))}
-                  favoriteLoading={favoriteLoadingId === blog.id}
-                  onToggleFavorite={handleToggleFavorite}
-                />
-              ))}
-            </div>
+            <>
+              <div className="blog-grid">
+                {blogs.map((blog) => (
+                  <BlogCard
+                    key={blog.id}
+                    blog={blog}
+                    isAuthenticated={isAuthenticated}
+                    isFavorited={favoriteIds.has(String(blog.id))}
+                    favoriteLoading={favoriteLoadingId === blog.id}
+                    onToggleFavorite={handleToggleFavorite}
+                  />
+                ))}
+              </div>
+              {loadingMore && (
+                <div className="home-load-more">
+                  <LoadingSpinner size="sm" centered={false} />
+                </div>
+              )}
+              {hasMore && !error && <div ref={loadMoreRef} className="home-load-sentinel" aria-hidden="true" />}
+            </>
           )}
         </div>
 
