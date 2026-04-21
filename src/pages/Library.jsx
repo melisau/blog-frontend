@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import axiosInstance from '../api/axiosInstance'
 import { useAuth } from '../context/AuthContext'
 import SEO from '../components/SEO'
@@ -8,6 +8,14 @@ import BlogCardStats from '../components/BlogCardStats'
 import { extractTags, toPlainExcerpt } from '../utils/blogText'
 
 // ── Normaliser ────────────────────────────────────────────────────────────────
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+function resolveImageUrl(url) {
+  if (!url) return null
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  return `${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`
+}
 
 function normalizeBlog(raw) {
   const dateRaw = raw.created_at ?? raw.createdAt ?? raw.date ?? null
@@ -24,7 +32,7 @@ function normalizeBlog(raw) {
     category: typeof raw.category === 'string' ? raw.category : (raw.category?.name ?? null),
     tags:     extractTags(raw),
     authorId: raw.author_id ?? raw.author?.id ?? null,
-    imageUrl: raw.image_url ?? raw.imageUrl ?? null,
+    imageUrl: resolveImageUrl(raw.cover_image_url ?? raw.image_url ?? raw.imageUrl ?? null),
     favoriteCount: raw.favorite_count ?? raw.favorites_count ?? raw.like_count ?? raw.likes_count ?? 0,
     commentCount: raw.comment_count ?? raw.comments_count ?? 0,
   }
@@ -34,6 +42,7 @@ function normalizeBlog(raw) {
 
 export default function Library() {
   const { user } = useAuth()
+  const navigate = useNavigate()
 
   const [blogs,   setBlogs]   = useState([])
   const [loading, setLoading] = useState(true)
@@ -96,10 +105,20 @@ export default function Library() {
       ) : (
         <div className="blog-grid">
           {blogs.map((blog) => (
-            <article key={blog.id} className="blog-card library-card">
+            <article
+              key={blog.id}
+              className="blog-card library-card"
+              onClick={() => navigate(`/blogs/${blog.id}`)}
+              role="link"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && navigate(`/blogs/${blog.id}`)}
+            >
               <button
                 className="blog-card__favorite blog-card__favorite--active"
-                onClick={() => handleRemove(blog.id)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleRemove(blog.id)
+                }}
                 disabled={removing === blog.id}
                 title="Favorilerden çıkar"
                 aria-label="Favorilerden çıkar"
