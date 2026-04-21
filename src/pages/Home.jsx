@@ -84,12 +84,24 @@ function extractPage(data, page, limit, category, tag, query) {
     }
   }
 
-  const list = data.items ?? data.results ?? data.blogs ?? data.posts ?? data.data ?? []
-  const total = data.total ?? data.count ?? data.total_count ?? list.length
-  const pages = data.total_pages ?? data.totalPages ?? data.pages ?? Math.max(1, Math.ceil(total / limit))
+  const list = data.items ?? data.results ?? data.blogs ?? data.posts ?? data.data ?? data.content ?? []
+  const total = data.total ?? data.count ?? data.total_count ?? data.totalCount ?? data.total_items ?? data.totalItems ?? list.length
+  const pages = data.total_pages ?? data.totalPages ?? data.pages ?? data.total_page ?? data.totalPage ?? Math.max(1, Math.ceil(total / limit))
+
+  // If the backend returned an object but we still have a query that wasn't handled by the backend
+  // (we can guess this if the total matches the list length but we have a query), 
+  // we might want to filter client-side, but usually we trust the backend if it returns an object.
+  let blogs = list.map(normalizeBlog)
+  if (query && list.length > 0 && !data.query_applied && !data.search_applied) {
+    // Optional: client-side filter fallback if backend didn't search
+    const filtered = blogs.filter(b => matchesQuery(b, query))
+    if (filtered.length < blogs.length) {
+      blogs = filtered
+    }
+  }
 
   return {
-    blogs: list.map(normalizeBlog),
+    blogs,
     totalPages: pages,
   }
 }
@@ -122,6 +134,7 @@ export default function Home() {
     const params = { page, limit: POSTS_PER_PAGE }
     if (activeCategory) params.category = activeCategory
     if (activeTag)      params.tag = activeTag
+    if (query)          params.q = query
 
     axiosInstance
       .get('/blogs', { params })

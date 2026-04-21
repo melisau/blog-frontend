@@ -62,6 +62,7 @@ function normalizeBlogs(raw) {
       title:    b.title ?? b.name ?? b.headline ?? '(Başlıksız)',
       excerpt:  toPlainExcerpt(b.excerpt ?? b.summary ?? b.content ?? b.body ?? '', 120),
       date,
+      authorId: b.author?.id ?? b.author_id ?? b.user?.id ?? b.user_id ?? b.created_by?.id ?? b.created_by ?? null,
       category: typeof b.category === 'string' ? b.category : (b.category?.name ?? null),
       tags:     extractTags(b),
       imageUrl: b.image_url ?? b.imageUrl ?? null,
@@ -253,7 +254,10 @@ export default function Profile() {
       .catch(() => axiosInstance.get(`/blogs?author_id=${id}`))  // fallback
       .then(({ data }) => {
         if (cancelled) return
-        const list = normalizeBlogs(data)
+        const list = normalizeBlogs(data).filter((b) => {
+          if (b.authorId == null) return true
+          return String(b.authorId) === String(id)
+        })
         setBlogs(list)
         // Derive the real count from the fetched list — the user endpoint
         // often omits post_count or returns 0, so the list length is the

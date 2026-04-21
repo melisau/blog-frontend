@@ -42,13 +42,17 @@ export default function BlogCard({ blog, isAuthenticated = false, isFavorited = 
               size="sm"
               iconId={blog.author.iconId ?? null}
             />
-            <Link
-              to={`/profile/${blog.authorId}`}
-              className="blog-card__author blog-card__author--link"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {blog.author.username}
-            </Link>
+            {blog.authorId ? (
+              <Link
+                to={`/profile/${blog.authorId}`}
+                className="blog-card__author blog-card__author--link"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {blog.author.username}
+              </Link>
+            ) : (
+              <span className="blog-card__author">{blog.author.username}</span>
+            )}
           </div>
         )}
 
