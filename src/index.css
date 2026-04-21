@@ -34,7 +34,6 @@
 
 /* Dark theme — applied via JS (data-theme="dark" on <html>) */
 /* Falls back to system preference when no manual selection has been made. */
-[data-theme="dark"],
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --text: #c4a0b5;

@@ -3,6 +3,8 @@ import { createContext, useContext, useEffect, useState } from 'react'
 const ThemeContext = createContext(null)
 
 function getInitialTheme() {
+  const attrTheme = document.documentElement.getAttribute('data-theme')
+  if (attrTheme === 'light' || attrTheme === 'dark') return attrTheme
   const stored = localStorage.getItem('theme')
   if (stored === 'light' || stored === 'dark') return stored
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
