@@ -6,38 +6,8 @@ import SEO from '../components/SEO'
 import HeartIcon from '../components/icons/HeartIcon'
 import BlogCardStats from '../components/BlogCardStats'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { extractTags, toPlainExcerpt } from '../utils/blogText'
-
-// ── Normaliser ────────────────────────────────────────────────────────────────
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
-function resolveImageUrl(url) {
-  if (!url) return null
-  if (url.startsWith('http://') || url.startsWith('https://')) return url
-  return `${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`
-}
-
-function normalizeBlog(raw) {
-  const dateRaw = raw.created_at ?? raw.createdAt ?? raw.date ?? null
-  const date = dateRaw
-    ? new Date(dateRaw).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
-    : ''
-  const rawExcerpt = raw.excerpt ?? raw.summary ?? raw.content ?? raw.body ?? ''
-  const excerpt = toPlainExcerpt(rawExcerpt, 150)
-  return {
-    id:       raw.id,
-    title:    raw.title ?? '(Başlıksız)',
-    excerpt,
-    date,
-    category: typeof raw.category === 'string' ? raw.category : (raw.category?.name ?? null),
-    tags:     extractTags(raw),
-    authorId: raw.author_id ?? raw.author?.id ?? null,
-    imageUrl: resolveImageUrl(raw.cover_image_url ?? raw.image_url ?? raw.imageUrl ?? null),
-    favoriteCount: raw.favorite_count ?? raw.favorites_count ?? raw.like_count ?? raw.likes_count ?? 0,
-    commentCount: raw.comment_count ?? raw.comments_count ?? 0,
-  }
-}
+import AsyncState from '../components/AsyncState'
+import { extractBlogList, normalizeBlogs } from '../services/blogMapper'
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -55,10 +25,7 @@ export default function Library() {
     setError('')
     try {
       const { data } = await axiosInstance.get('/users/me/favorites')
-      const list = Array.isArray(data)
-        ? data
-        : (data?.items ?? data?.results ?? data?.data ?? [])
-      setBlogs(list.map(normalizeBlog))
+      setBlogs(normalizeBlogs(extractBlogList(data)))
     } catch {
       setError('Kütüphane yüklenemedi.')
     } finally {
@@ -83,30 +50,34 @@ export default function Library() {
 
       <h1 className="library-title">Kütüphanem</h1>
 
-      {loading ? (
-        <>
-          <div className="blog-grid">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="blog-card blog-card--skeleton">
-                <div className="blog-card__thumb skeleton-block" />
-                <div className="blog-card__body">
-                  <div className="skeleton-line skeleton-line--short" />
-                  <div className="skeleton-line" />
-                  <div className="skeleton-line skeleton-line--long" />
+      <AsyncState
+        loading={loading}
+        error={error}
+        isEmpty={blogs.length === 0}
+        loadingView={
+          <>
+            <div className="blog-grid">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="blog-card blog-card--skeleton">
+                  <div className="blog-card__thumb skeleton-block" />
+                  <div className="blog-card__body">
+                    <div className="skeleton-line skeleton-line--short" />
+                    <div className="skeleton-line" />
+                    <div className="skeleton-line skeleton-line--long" />
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+            <LoadingSpinner size="sm" />
+          </>
+        }
+        emptyView={
+          <div className="comments-empty">
+            Henüz hiç yazı kaydetmediniz.{' '}
+            <Link to="/" className="auth-link">Yazılara göz atın →</Link>
           </div>
-          <LoadingSpinner size="sm" />
-        </>
-      ) : error ? (
-        <div className="auth-server-error" role="alert">{error}</div>
-      ) : blogs.length === 0 ? (
-        <div className="comments-empty">
-          Henüz hiç yazı kaydetmediniz.{' '}
-          <Link to="/" className="auth-link">Yazılara göz atın →</Link>
-        </div>
-      ) : (
+        }
+      >
         <div className="blog-grid">
           {blogs.map((blog) => (
             <article
@@ -167,7 +138,7 @@ export default function Library() {
             </article>
           ))}
         </div>
-      )}
+      </AsyncState>
     </div>
   )
 }

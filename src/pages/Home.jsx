@@ -1,59 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import axiosInstance from '../api/axiosInstance'
 import { useAuth } from '../context/AuthContext'
 import BlogCard from '../components/BlogCard'
 import SEO from '../components/SEO'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { extractTags, toPlainExcerpt } from '../utils/blogText'
-/** @typedef {import('../types/blog').BlogResponse} BlogResponse */
-
-// ── Normalisers ──────────────────────────────────────────────────────────────
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
-function resolveImageUrl(url) {
-  if (!url) return null
-  if (url.startsWith('http://') || url.startsWith('https://')) return url
-  return `${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`
-}
-
-function normalizeBlog(raw) {
-  const dateRaw = raw.created_at ?? raw.createdAt ?? raw.date ?? null
-  const date = dateRaw
-    ? new Date(dateRaw).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
-    : ''
-
-  const rawExcerpt = raw.excerpt ?? raw.summary ?? raw.description ?? raw.content ?? raw.body ?? ''
-  const excerpt = toPlainExcerpt(rawExcerpt, 150)
-
-  const embeddedName = raw.author?.username ?? raw.author?.name ?? raw.author_name ?? raw.owner_name ?? null
-  const embeddedIconId = raw.author?.icon_id ?? raw.author?.iconId ?? raw.owner?.icon_id ?? null
-
-  return {
-    id:       raw.id,
-    title:    raw.title ?? raw.name ?? raw.headline ?? '(Başlıksız)',
-    excerpt,
-    date,
-    category: typeof raw.category === 'string' ? raw.category : (raw.category?.name ?? null),
-    tags:     extractTags(raw),
-    authorId: raw.author?.id ?? raw.author_id ?? null,
-    author:   embeddedName ? { username: embeddedName, iconId: embeddedIconId } : null,
-    imageUrl: resolveImageUrl(raw.cover_image_url ?? raw.image_url ?? raw.imageUrl ?? null),
-    favoriteCount: raw.favorite_count ?? raw.favorites_count ?? raw.like_count ?? raw.likes_count ?? 0,
-    commentCount: raw.comment_count ?? raw.comments_count ?? 0,
-  }
-}
-
-function extractBlogs(data) {
-  let list = []
-  if (Array.isArray(data)) {
-    list = data
-  } else {
-    list = data.items ?? data.results ?? data.blogs ?? data.posts ?? data.data ?? data.content ?? []
-  }
-  return list.map(normalizeBlog)
-}
+import { extractTags } from '../utils/blogText'
+import { extractBlogList } from '../services/blogMapper'
+import { useInfiniteBlogs } from '../hooks/useInfiniteBlogs'
 
 // ── Page Component ───────────────────────────────────────────────────────────
 
@@ -67,128 +21,15 @@ export default function Home() {
   const activeTag      = searchParams.get('tag')
   const query          = searchParams.get('q')?.trim() ?? ''
 
-  const [blogs,      setBlogs]      = useState([])
-  const [loading,    setLoading]    = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [error,      setError]      = useState('')
   const [recentTags, setRecentTags] = useState([])
   const [favoriteIds, setFavoriteIds] = useState(new Set())
   const [favoriteLoadingId, setFavoriteLoadingId] = useState(null)
-  const [hasMore, setHasMore] = useState(true)
-
-  const observerRef = useRef(null)
-  const loadMoreRef = useRef(null)
-  const skipRef = useRef(0)
-  const isLoadingRef = useRef(false)
-  const hasMoreRef = useRef(true)
-
-  const hydrateAuthors = useCallback(async (list) => {
-    const missingUids = [...new Set(list.filter((b) => !b.author && b.authorId).map((b) => b.authorId))]
-    if (missingUids.length === 0) return list
-
-    const authorMap = {}
-    try {
-      const results = await Promise.all(missingUids.map((id) => axiosInstance.get(`/users/${id}`)))
-      results.forEach(({ data: u }) => {
-        authorMap[u.id] = {
-          username: u.username ?? u.name ?? u.full_name ?? null,
-          iconId: u.icon_id ?? u.iconId ?? null,
-        }
-      })
-    } catch {
-      // Yazar çözümleme başarısızsa kartlar yazarsız gösterilir.
-    }
-
-    return list.map((b) => ({
-      ...b,
-      author: b.author ?? (b.authorId && authorMap[b.authorId]
-        ? {
-            username: authorMap[b.authorId].username,
-            iconId: authorMap[b.authorId].iconId,
-          }
-        : null),
-    }))
-  }, [])
-
-  const fetchBlogs = useCallback(async ({ reset = false } = {}) => {
-    if (isLoadingRef.current) return
-    if (!reset && !hasMoreRef.current) return
-
-    isLoadingRef.current = true
-    setError('')
-
-    if (reset) {
-      setLoading(true)
-      setLoadingMore(false)
-      setHasMore(true)
-      hasMoreRef.current = true
-      skipRef.current = 0
-    } else {
-      setLoadingMore(true)
-    }
-
-    try {
-      const params = {
-        skip: reset ? 0 : skipRef.current,
-        limit: BATCH_SIZE,
-      }
-      if (activeCategory) params.category = activeCategory
-      if (activeTag) params.tag = activeTag
-      if (query) params.q = query
-
-      /** @type {{ data: BlogResponse | any[] }} */
-      const { data } = await axiosInstance.get('/blogs', { params })
-      const rawList = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.blogs ?? data?.posts ?? data?.data ?? data?.content ?? [])
-      const normalized = await hydrateAuthors(extractBlogs(data))
-
-      setBlogs((prev) => {
-        if (reset) return normalized
-        const seen = new Set(prev.map((item) => String(item.id)))
-        const next = [...prev]
-        normalized.forEach((item) => {
-          const id = String(item.id)
-          if (!seen.has(id)) {
-            seen.add(id)
-            next.push(item)
-          }
-        })
-        return next
-      })
-
-      const nextHasMore = rawList.length === BATCH_SIZE
-      setHasMore(nextHasMore)
-      hasMoreRef.current = nextHasMore
-      skipRef.current = (reset ? 0 : skipRef.current) + BATCH_SIZE
-    } catch {
-      setError('Bloglar yüklenemedi. Lütfen tekrar deneyin.')
-    } finally {
-      setLoading(false)
-      setLoadingMore(false)
-      isLoadingRef.current = false
-    }
-  }, [activeCategory, activeTag, query, hydrateAuthors])
-
-  useEffect(() => {
-    fetchBlogs({ reset: true })
-  }, [fetchBlogs])
-
-  useEffect(() => {
-    if (loading || !hasMore || error) return
-    if (!loadMoreRef.current) return
-
-    observerRef.current?.disconnect()
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting && !isLoadingRef.current) {
-          fetchBlogs({ reset: false })
-        }
-      },
-      { rootMargin: '140px 0px' }
-    )
-    observerRef.current.observe(loadMoreRef.current)
-
-    return () => observerRef.current?.disconnect()
-  }, [fetchBlogs, hasMore, loading, error])
+  const { blogs, loading, loadingMore, error, hasMore, loadMoreRef } = useInfiniteBlogs({
+    batchSize: BATCH_SIZE,
+    category: activeCategory,
+    tag: activeTag,
+    query,
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -196,7 +37,7 @@ export default function Home() {
       .get('/blogs', { params: { limit: 100 } })
       .then(({ data }) => {
         if (cancelled) return
-        const list = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.blogs ?? data?.posts ?? data?.data ?? [])
+        const list = extractBlogList(data)
         const counts = new Map()
         list.forEach((b) => {
           extractTags(b).forEach((tag) => {

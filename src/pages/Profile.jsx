@@ -16,7 +16,8 @@ import { useAuth } from '../context/AuthContext'
 import Avatar, { AVATARS, getCachedIconId, saveAvatarCache } from '../components/Avatar'
 import BlogCardStats from '../components/BlogCardStats'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { extractTags, toPlainExcerpt } from '../utils/blogText'
+import AsyncState from '../components/AsyncState'
+import { normalizeBlogs } from '../services/blogMapper'
 
 // ── Data normalisers ──────────────────────────────────────────────────────────
 
@@ -42,35 +43,6 @@ function normalizeUser(raw) {
     blogCount:    raw.post_count  ?? raw.postCount  ?? raw.blog_count ?? raw.blogCount ?? 0,
     commentCount: raw.comment_count ?? raw.commentCount ?? 0,
   }
-}
-
-// Converts a raw API blog (or list) into a uniform array.
-// Handles both a plain array and paginated { items, results, blogs, data } shapes.
-function normalizeBlogs(raw) {
-  const list = Array.isArray(raw)
-    ? raw
-    : (raw?.items ?? raw?.results ?? raw?.blogs ?? raw?.posts ?? raw?.data ?? [])
-
-  return list.map((b) => {
-    const dateRaw = b.created_at ?? b.createdAt ?? b.date ?? null
-    const date = dateRaw
-      ? new Date(dateRaw).toLocaleDateString('tr-TR', {
-          day: 'numeric', month: 'long', year: 'numeric',
-        })
-      : ''
-    return {
-      id:       b.id,
-      title:    b.title ?? b.name ?? b.headline ?? '(Başlıksız)',
-      excerpt:  toPlainExcerpt(b.excerpt ?? b.summary ?? b.content ?? b.body ?? '', 120),
-      date,
-      authorId: b.author?.id ?? b.author_id ?? b.user?.id ?? b.user_id ?? b.created_by?.id ?? b.created_by ?? null,
-      category: typeof b.category === 'string' ? b.category : (b.category?.name ?? null),
-      tags:     extractTags(b),
-      imageUrl: b.image_url ?? b.imageUrl ?? null,
-      favoriteCount: b.favorite_count ?? b.favorites_count ?? b.like_count ?? b.likes_count ?? 0,
-      commentCount: b.comment_count ?? b.comments_count ?? 0,
-    }
-  })
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -255,7 +227,7 @@ export default function Profile() {
       .catch(() => axiosInstance.get(`/blogs?author_id=${id}`))  // fallback
       .then(({ data }) => {
         if (cancelled) return
-        const list = normalizeBlogs(data).filter((b) => {
+        const list = normalizeBlogs(data, 120).filter((b) => {
           if (b.authorId == null) return true
           return String(b.authorId) === String(id)
         })
@@ -498,40 +470,40 @@ export default function Profile() {
             : `${profileUser.username} Adlı Kullanıcının Yazıları`}
         </h2>
 
-        {blogsError && (
-          <div className="auth-server-error" role="alert" style={{ marginBottom: 16 }}>
-            {blogsError}
-          </div>
-        )}
-
-        {blogsLoading ? (
-          <>
-            <div className="blog-grid">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="blog-card blog-card--skeleton">
-                  <div className="blog-card__thumb skeleton-block" />
-                  <div className="blog-card__body">
-                    <div className="skeleton-line skeleton-line--short" />
-                    <div className="skeleton-line" />
-                    <div className="skeleton-line skeleton-line--long" />
+        <AsyncState
+          loading={blogsLoading}
+          error={blogsError}
+          isEmpty={blogs.length === 0}
+          loadingView={
+            <>
+              <div className="blog-grid">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="blog-card blog-card--skeleton">
+                    <div className="blog-card__thumb skeleton-block" />
+                    <div className="blog-card__body">
+                      <div className="skeleton-line skeleton-line--short" />
+                      <div className="skeleton-line" />
+                      <div className="skeleton-line skeleton-line--long" />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+              <LoadingSpinner size="sm" />
+            </>
+          }
+          emptyView={
+            <div className="comments-empty">
+              {isOwnProfile
+                ? 'Henüz yazı oluşturmadınız.'
+                : 'Bu kullanıcının henüz yazısı bulunmuyor.'}
+              {isOwnProfile && (
+                <> {' '}
+                  <Link to="/new-blog" className="auth-link">İlk yazınızı oluşturun →</Link>
+                </>
+              )}
             </div>
-            <LoadingSpinner size="sm" />
-          </>
-        ) : blogs.length === 0 && !blogsError ? (
-          <div className="comments-empty">
-            {isOwnProfile
-              ? 'Henüz yazı oluşturmadınız.'
-              : 'Bu kullanıcının henüz yazısı bulunmuyor.'}
-            {isOwnProfile && (
-              <> {' '}
-                <Link to="/new-blog" className="auth-link">İlk yazınızı oluşturun →</Link>
-              </>
-            )}
-          </div>
-        ) : (
+          }
+        >
           <div className="blog-grid">
             {blogs.map((blog) => (
               <Link key={blog.id} to={`/blogs/${blog.id}`} className="blog-card">
@@ -561,7 +533,7 @@ export default function Profile() {
               </Link>
             ))}
           </div>
-        )}
+        </AsyncState>
       </div>
     </div>
   )
