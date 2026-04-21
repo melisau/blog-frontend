@@ -3,11 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom'
 import axiosInstance from '../api/axiosInstance'
 import { useAuth } from '../context/AuthContext'
 import BlogCard from '../components/BlogCard'
-import Pagination from '../components/Pagination'
 import SEO from '../components/SEO'
 import { extractTags, toPlainExcerpt } from '../utils/blogText'
-
-const POSTS_PER_PAGE = 6
 
 // ── Normalisers ──────────────────────────────────────────────────────────────
 
@@ -58,59 +55,27 @@ function matchesQuery(blog, q) {
   return text.includes(query)
 }
 
-function extractPage(data, page, limit, category, tag, query, headers = {}) {
-  // 1. Try to get total from headers first (common in many APIs)
-  const headerTotal = headers['x-total-count'] ?? headers['X-Total-Count'] ?? headers['total-count']
-  
+function extractBlogs(data, category, tag, query) {
+  let list = []
   if (Array.isArray(data)) {
-    let filtered = data
-    if (category) {
-      filtered = filtered.filter((b) => {
-        const cat = typeof b.category === 'string' ? b.category : (b.category?.name ?? null)
-        return cat === category
-      })
-    }
-    if (tag) {
-      filtered = filtered.filter((b) => {
-        const tags = extractTags(b)
-        return tags.includes(tag)
-      })
-    }
-    if (query) {
-      filtered = filtered.filter((b) => matchesQuery(normalizeBlog(b), query))
-    }
-
-    const totalCount = headerTotal ? parseInt(headerTotal, 10) : filtered.length
-    
-    // If we have a header total, we assume the data is already paginated by the backend
-    if (headerTotal) {
-      return {
-        blogs:      filtered.map(normalizeBlog),
-        totalPages: Math.max(1, Math.ceil(totalCount / limit)),
-      }
-    }
-
-    const start = (page - 1) * limit
-    return {
-      blogs:      filtered.slice(start, start + limit).map(normalizeBlog),
-      totalPages: Math.max(1, Math.ceil(filtered.length / limit)),
-    }
+    list = data
+  } else {
+    list = data.items ?? data.results ?? data.blogs ?? data.posts ?? data.data ?? data.content ?? []
   }
-
-  const list = data.items ?? data.results ?? data.blogs ?? data.posts ?? data.data ?? data.content ?? []
-  const total = data.total ?? data.count ?? data.total_count ?? data.totalCount ?? data.total_items ?? data.totalItems ?? headerTotal ?? list.length
-  const pages = data.total_pages ?? data.totalPages ?? data.pages ?? data.total_page ?? data.totalPage ?? Math.max(1, Math.ceil(Number(total) / limit))
 
   let blogs = list.map(normalizeBlog)
-  if (query && list.length > 0 && !data.query_applied && !data.search_applied) {
-    const filtered = blogs.filter(b => matchesQuery(b, query))
-    if (filtered.length < blogs.length) blogs = filtered
+
+  if (category) {
+    blogs = blogs.filter((b) => b.category === category)
+  }
+  if (tag) {
+    blogs = blogs.filter((b) => b.tags.includes(tag))
+  }
+  if (query) {
+    blogs = blogs.filter((b) => matchesQuery(b, query))
   }
 
-  return {
-    blogs,
-    totalPages: pages,
-  }
+  return blogs
 }
 
 // ── Page Component ───────────────────────────────────────────────────────────
@@ -126,29 +91,26 @@ export default function Home() {
   const [blogs,      setBlogs]      = useState([])
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState('')
-  const [page,       setPage]       = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
   const [recentTags, setRecentTags] = useState([])
   const [favoriteIds, setFavoriteIds] = useState(new Set())
   const [favoriteLoadingId, setFavoriteLoadingId] = useState(null)
 
-  // Fetch blogs on mount and when filters or page change
+  // Fetch blogs on mount and when filters change
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError('')
 
-    const params = { page, limit: POSTS_PER_PAGE }
+    const params = {}
     if (activeCategory) params.category = activeCategory
     if (activeTag)      params.tag = activeTag
     if (query)          params.q = query
 
     axiosInstance
       .get('/blogs', { params })
-      .then(async (response) => {
+      .then(async ({ data }) => {
         if (cancelled) return
-        const { data, headers } = response
-        const { blogs: list, totalPages: pages } = extractPage(data, page, POSTS_PER_PAGE, activeCategory, activeTag, query, headers)
+        const list = extractBlogs(data, activeCategory, activeTag, query)
         
         // Resolve author names for blogs that don't have them
         const missingUids = [...new Set(list.filter((b) => !b.author && b.authorId).map((b) => b.authorId))]
@@ -175,21 +137,17 @@ export default function Home() {
               }
             : null),
         })))
-        setTotalPages(pages)
       })
       .catch(() => { if (!cancelled) setError('Yazılar yüklenemedi. Lütfen sayfayı yenileyin.') })
       .finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
-  }, [page, activeCategory, activeTag, query])
-
-  // Reset to first page when filters change
-  useEffect(() => { setPage(1) }, [activeCategory, activeTag, query])
+  }, [activeCategory, activeTag, query])
 
   useEffect(() => {
     let cancelled = false
     axiosInstance
-      .get('/blogs', { params: { page: 1, limit: 100 } })
+      .get('/blogs', { params: { limit: 100 } })
       .then(({ data }) => {
         if (cancelled) return
         const list = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.blogs ?? data?.posts ?? data?.data ?? [])
@@ -272,7 +230,7 @@ export default function Home() {
           {/* ── Content ── */}
           {loading ? (
             <div className="blog-grid">
-              {Array.from({ length: POSTS_PER_PAGE }).map((_, i) => (
+              {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="blog-card blog-card--skeleton">
                   <div className="blog-card__thumb skeleton-block" />
                   <div className="blog-card__body">
@@ -293,21 +251,18 @@ export default function Home() {
               )}
             </div>
           ) : (
-            <>
-              <div className="blog-grid">
-                {blogs.map((blog) => (
-                  <BlogCard
-                    key={blog.id}
-                    blog={blog}
-                    isAuthenticated={isAuthenticated}
-                    isFavorited={favoriteIds.has(String(blog.id))}
-                    favoriteLoading={favoriteLoadingId === blog.id}
-                    onToggleFavorite={handleToggleFavorite}
-                  />
-                ))}
-              </div>
-              <Pagination page={page} totalPages={totalPages} setPage={setPage} />
-            </>
+            <div className="blog-grid">
+              {blogs.map((blog) => (
+                <BlogCard
+                  key={blog.id}
+                  blog={blog}
+                  isAuthenticated={isAuthenticated}
+                  isFavorited={favoriteIds.has(String(blog.id))}
+                  favoriteLoading={favoriteLoadingId === blog.id}
+                  onToggleFavorite={handleToggleFavorite}
+                />
+              ))}
+            </div>
           )}
         </div>
 

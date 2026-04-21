@@ -69,7 +69,6 @@
 [data-theme="dark"] .btn--primary,
 [data-theme="dark"] .auth-btn,
 [data-theme="dark"] .follow-btn,
-[data-theme="dark"] .pagination__page--active,
 [data-theme="dark"] .avatar-picker__item--active::after {
   color: #d5cbdb;
 }
@@ -78,7 +77,6 @@
   :root:not([data-theme="light"]) .btn--primary,
   :root:not([data-theme="light"]) .auth-btn,
   :root:not([data-theme="light"]) .follow-btn,
-  :root:not([data-theme="light"]) .pagination__page--active,
   :root:not([data-theme="light"]) .avatar-picker__item--active::after {
     color: #d5cbdb;
   }
@@ -1581,74 +1579,6 @@ p {
 
 .blog-card--skeleton {
   pointer-events: none;
-}
-
-/* ── Pagination ──────────────────────────────────────── */
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 48px;
-  flex-wrap: wrap;
-}
-
-.pagination__btn {
-  padding: 8px 18px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--text-h);
-  font-size: 14px;
-  font-family: var(--sans);
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
-}
-
-.pagination__btn:hover:not(:disabled) {
-  border-color: var(--accent-border);
-  color: var(--accent);
-  background: var(--accent-bg);
-}
-
-.pagination__btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.pagination__pages {
-  display: flex;
-  gap: 6px;
-}
-
-.pagination__page {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 14px;
-  font-family: var(--sans);
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
-}
-
-.pagination__page:hover:not(.pagination__page--active) {
-  border-color: var(--accent-border);
-  color: var(--accent);
-  background: var(--accent-bg);
-}
-
-.pagination__page--active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #e5f6f4;
-  font-weight: 600;
-  cursor: default;
 }
 
 /* ── Post card footer ────────────────────────────────── */
