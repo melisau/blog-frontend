@@ -3,13 +3,9 @@
 //
 // API calls:
 //   GET /users/:id          → user info card
+//   GET /users/:id/stats    → counters (posts/comments/followers/following)
 //   GET /users/:id/blogs    → that user's blog list
-//                             (fallback: GET /blogs?author_id=:id)
-//
-// Both endpoints can return different field-name conventions depending on the
-// backend framework.  normalizeUser() and normalizeBlogs() absorb those
-// differences so the rest of the component always works with a fixed shape.
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import axiosInstance from '../api/axiosInstance'
 import { useAuth } from '../context/AuthContext'
@@ -19,12 +15,24 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import AsyncState from '../components/AsyncState'
 import { normalizeBlogs } from '../services/blogMapper'
 
+function toSafeCount(...values) {
+  for (const value of values) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed
+  }
+  return 0
+}
+
+function extractItems(data) {
+  return Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.data ?? [])
+}
+
 // ── Data normalisers ──────────────────────────────────────────────────────────
 
 // Converts a raw API user object into the shape the UI expects.
 // Handles both camelCase and snake_case field names.
 function normalizeUser(raw) {
-  const joinRaw = raw.created_at ?? raw.createdAt ?? raw.joined_at ?? null
+  const joinRaw = raw.created_at ?? null
   let joinDate = ''
   if (joinRaw) {
     joinDate = new Date(joinRaw).toLocaleDateString('tr-TR', {
@@ -34,16 +42,16 @@ function normalizeUser(raw) {
   }
   return {
     id:           raw.id,
-    username:     raw.username ?? raw.name ?? raw.full_name ?? `Kullanıcı #${raw.id}`,
+    username:     raw.username ?? `Kullanıcı #${raw.id}`,
     email:        raw.email ?? null,
-    bio:          raw.bio ?? raw.description ?? '',
+    bio:          raw.bio ?? '',
     joinDate,
     // icon_id from backend (1-based, matches AVATARS[].id)
-    iconId:       raw.icon_id ?? raw.iconId ?? null,
-    blogCount:    raw.post_count  ?? raw.postCount  ?? raw.blog_count ?? raw.blogCount ?? 0,
-    commentCount: raw.comment_count ?? raw.commentCount ?? 0,
-    followingCount: raw.following_count ?? raw.followingCount ?? 0,
-    followerCount: raw.followers_count ?? raw.followerCount ?? raw.followersCount ?? 0,
+    iconId:       raw.icon_id ?? null,
+    blogCount:    toSafeCount(raw.post_count, raw.blog_count, raw.posts_count),
+    commentCount: toSafeCount(raw.comment_count, raw.comments_count),
+    followingCount: toSafeCount(raw.following_count, raw.followingCount),
+    followerCount: toSafeCount(raw.followers_count, raw.follower_count, raw.followerCount),
   }
 }
 
@@ -72,7 +80,7 @@ export default function Profile() {
   // ── Follow state ──────────────────────────────────────────────────────────
   const [isFollowing,     setIsFollowing]     = useState(false)
   const [followLoading,   setFollowLoading]   = useState(false)
-  const [followCountsLoading, setFollowCountsLoading] = useState(true)
+  const [statsLoading, setStatsLoading] = useState(true)
   // ── Edit mode state ───────────────────────────────────────────────────────
   const [editMode,      setEditMode]      = useState(false)
   const [editFields,    setEditFields]    = useState({ username: '', bio: '' })
@@ -83,6 +91,93 @@ export default function Profile() {
   const [editServerErr, setEditServerErr] = useState('')
 
   // Check follow status when viewing another user's profile
+  const fetchStats = useCallback(async () => {
+    if (!id) return
+    setStatsLoading(true)
+    try {
+      const { data } = await axiosInstance.get(`/users/${id}/stats`)
+      setProfileUser((prev) => prev ? {
+        ...prev,
+        blogCount: toSafeCount(data?.post_count, data?.blog_count),
+        commentCount: toSafeCount(data?.comment_count, data?.comments_count),
+        followingCount: toSafeCount(data?.following_count, data?.followingCount),
+        followerCount: toSafeCount(data?.followers_count, data?.follower_count, data?.followerCount),
+      } : prev)
+    } catch {
+      // /stats başarısızsa bağlantı listelerinden net sayı türet.
+      async function fetchConnectionCount(type) {
+        const pageSize = 100
+        let skip = 0
+        let total = 0
+
+        for (let i = 0; i < 100; i += 1) {
+          const { data } = await axiosInstance.get(`/users/${id}/${type}`, {
+            params: { skip, limit: pageSize },
+          })
+          const countFromMeta = toSafeCount(
+            data?.total,
+            data?.count,
+            data?.total_count,
+            data?.pagination?.total,
+            data?.meta?.total,
+          )
+          if (countFromMeta > 0 || Number(data?.total) === 0 || Number(data?.count) === 0) return countFromMeta
+
+          const list = extractItems(data)
+          total += list.length
+          if (list.length < pageSize) break
+          skip += list.length
+        }
+
+        return total
+      }
+
+      async function fetchPostCount() {
+        const pageSize = 100
+        async function countFromEndpoint(getPage) {
+          let skip = 0
+          let total = 0
+
+          for (let i = 0; i < 100; i += 1) {
+            const { data } = await getPage(skip, pageSize)
+            const list = normalizeBlogs(data, 20).filter((blog) => {
+              if (blog.authorId == null) return false
+              return String(blog.authorId) === String(id)
+            })
+            total += list.length
+            if (list.length < pageSize) break
+            skip += pageSize
+          }
+
+          return total
+        }
+
+        try {
+          return await countFromEndpoint((skip, limit) =>
+            axiosInstance.get(`/users/${id}/blogs`, { params: { skip, limit } })
+          )
+        } catch {
+          return countFromEndpoint((skip, limit) =>
+            axiosInstance.get('/blogs', { params: { author_id: id, skip, limit } })
+          )
+        }
+      }
+
+      try {
+        const [followingCount, followerCount, blogCount] = await Promise.all([
+          fetchConnectionCount('following'),
+          fetchConnectionCount('followers'),
+          fetchPostCount(),
+        ])
+        setProfileUser((prev) => prev ? { ...prev, followingCount, followerCount, blogCount } : prev)
+      } catch {
+        // fallback da başarısızsa mevcut değerleri koru
+      }
+    } finally {
+      setStatsLoading(false)
+    }
+  }, [id])
+
   useEffect(() => {
     if (isOwnProfile || !isAuthenticated || !id) return
     let cancelled = false
@@ -98,57 +193,8 @@ export default function Profile() {
   }, [id, isAuthenticated, isOwnProfile])
 
   useEffect(() => {
-    if (!id) return
-    let cancelled = false
-    setFollowCountsLoading(true)
-
-    async function fetchConnectionCount(type) {
-      const pageSize = 100
-      let skip = 0
-      let total = 0
-
-      // Fallback strategy:
-      // 1) If API returns metadata count/total, use it directly.
-      // 2) Otherwise, count by paging through all results.
-      for (let i = 0; i < 100; i += 1) {
-        const { data } = await axiosInstance.get(`/users/${id}/${type}`, {
-          params: { skip, limit: pageSize },
-        })
-        const countFromMeta = Number(
-          data?.total ??
-          data?.count ??
-          data?.total_count ??
-          data?.totalCount ??
-          data?.pagination?.total ??
-          data?.meta?.total ??
-          NaN,
-        )
-        if (Number.isFinite(countFromMeta)) return countFromMeta
-
-        const list = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.data ?? [])
-        total += list.length
-        if (list.length < pageSize) break
-        skip += list.length
-      }
-
-      return total
-    }
-
-    Promise.all([
-      fetchConnectionCount('following'),
-      fetchConnectionCount('followers'),
-    ])
-      .then(([followingCount, followerCount]) => {
-        if (cancelled) return
-        setProfileUser((prev) => prev ? { ...prev, followingCount, followerCount } : prev)
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setFollowCountsLoading(false)
-      })
-
-    return () => { cancelled = true }
-  }, [id, isFollowing])
+    fetchStats()
+  }, [fetchStats])
 
   async function handleToggleFollow() {
     if (followLoading) return
@@ -161,6 +207,7 @@ export default function Profile() {
         await axiosInstance.post(`/users/me/following/${id}`)
         setIsFollowing(true)
       }
+      fetchStats()
     } catch { /* toast shown by interceptor */ }
     finally { setFollowLoading(false) }
   }
@@ -202,33 +249,37 @@ export default function Profile() {
       // PUT /users/:id — send icon_id so backend stores the choice.
       const payload = { username: trimmedUsername, bio: trimmedBio }
       if (editAvatar !== null) payload.icon_id = editAvatar
-      await axiosInstance.put(`/users/${id}`, payload)
-    } catch {
-      // Non-blocking: localStorage and local state still update even if API rejects.
-    }
+      const { data } = await axiosInstance.put(`/users/${id}`, payload)
+      const normalized = normalizeUser(data)
 
-    // Write-through to localStorage cache so the icon renders instantly on next load.
-    if (editAvatar !== null) {
-      saveAvatarCache(id, editAvatar)
-      setAvatarChoice(editAvatar)
-    } else {
-      saveAvatarCache(id, null)
-      setAvatarChoice(null)
-    }
+      if (normalized.iconId !== null) {
+        saveAvatarCache(id, normalized.iconId)
+      } else {
+        saveAvatarCache(id, null)
+      }
+      setAvatarChoice(normalized.iconId)
 
-    // If this is the current user's own profile, sync the auth store so the
-    // Navbar reflects the new avatar and username immediately.
-    if (isOwnProfile) {
-      updateUser({ icon_id: editAvatar, username: trimmedUsername })
-    }
+      if (isOwnProfile) {
+        updateUser({ icon_id: normalized.iconId, username: normalized.username })
+      }
 
-    // Update local profile state so UI reflects changes immediately.
-    setProfileUser((prev) => ({
-      ...prev,
-      username: trimmedUsername,
-      bio:      trimmedBio,
-      iconId:   editAvatar,
-    }))
+      setProfileUser((prev) => ({
+        ...prev,
+        ...normalized,
+        blogCount: prev?.blogCount ?? 0,
+        commentCount: prev?.commentCount ?? 0,
+        followingCount: prev?.followingCount ?? 0,
+        followerCount: prev?.followerCount ?? 0,
+      }))
+    } catch (err) {
+      if (err.response?.status === 409) {
+        setEditErrors({ username: 'Bu kullanıcı adı zaten kullanılıyor.' })
+      } else {
+        setEditServerErr(err.response?.data?.detail ?? 'Profil güncellenemedi.')
+      }
+      setEditSaving(false)
+      return
+    }
 
     setEditSaving(false)
     setEditSuccess(true)
@@ -253,6 +304,7 @@ export default function Profile() {
           setAvatarChoice(normalized.iconId)
           saveAvatarCache(normalized.id, normalized.iconId)
         }
+        fetchStats()
       })
       .catch((err) => {
         if (!cancelled) {
@@ -287,10 +339,6 @@ export default function Profile() {
           return String(b.authorId) === String(id)
         })
         setBlogs(list)
-        // Derive the real count from the fetched list — the user endpoint
-        // often omits post_count or returns 0, so the list length is the
-        // authoritative value.
-        setProfileUser((prev) => prev ? { ...prev, blogCount: list.length } : prev)
       })
       .catch(() => {
         if (!cancelled) setBlogsError('Yazılar yüklenemedi.')
@@ -499,7 +547,7 @@ export default function Profile() {
             <div className="profile-stats">
               <div className="profile-stat">
                 <span className="profile-stat__value">
-                  {blogsLoading ? '…' : profileUser.blogCount}
+                  {statsLoading ? '…' : profileUser.blogCount}
                 </span>
                 <span className="profile-stat__label">Yazı</span>
               </div>
@@ -514,12 +562,12 @@ export default function Profile() {
               )}
               <div className="profile-stat__divider" />
               <Link to={`/profile/${id}/following`} className="profile-stat profile-stat--link">
-                <span className="profile-stat__value">{followCountsLoading ? '…' : profileUser.followingCount}</span>
+                <span className="profile-stat__value">{statsLoading ? '…' : profileUser.followingCount}</span>
                 <span className="profile-stat__label">Takip</span>
               </Link>
               <div className="profile-stat__divider" />
               <Link to={`/profile/${id}/followers`} className="profile-stat profile-stat--link">
-                <span className="profile-stat__value">{followCountsLoading ? '…' : profileUser.followerCount}</span>
+                <span className="profile-stat__value">{statsLoading ? '…' : profileUser.followerCount}</span>
                 <span className="profile-stat__label">Takipçi</span>
               </Link>
             </div>

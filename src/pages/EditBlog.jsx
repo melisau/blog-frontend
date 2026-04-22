@@ -11,15 +11,15 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import axiosInstance from '../api/axiosInstance'
 import RichTextEditor from '../components/RichTextEditor'
 import CoverImageField from '../components/CoverImageField'
+import { useCategories } from '../hooks/useCategories'
 
-const FALLBACK_CATEGORIES = ['Teknoloji', 'Genel', 'Yaşam', 'Eğitim', 'Spor', 'Seyahat', 'Yemek', 'Bilim']
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
 
 function validate(fields) {
   const errors = {}
   if (!fields.title.trim()) errors.title = 'Başlık zorunludur.'
   else if (fields.title.trim().length < 5) errors.title = 'Başlık en az 5 karakter olmalıdır.'
-  if (!fields.category) errors.category = 'Kategori seçimi zorunludur.'
+  if (!fields.categoryId) errors.category = 'Kategori seçimi zorunludur.'
   if (!fields.content.trim()) errors.content = 'İçerik zorunludur.'
   else if (fields.content.trim().length < 20) errors.content = 'İçerik en az 20 karakter olmalıdır.'
   return errors
@@ -29,19 +29,17 @@ export default function EditBlog() {
   const { id } = useParams()
   const navigate = useNavigate()
 
-  const [fields, setFields] = useState({ title: '', category: '', content: '' })
+  const [fields, setFields] = useState({ title: '', categoryId: '', content: '' })
   const [errors, setErrors] = useState({})
   const [serverError, setServerError] = useState('')
   const [loading,  setLoading]  = useState(false)
   const [fetching, setFetching] = useState(true)
 
-  const [categories,        setCategories]        = useState([])
-  const [categoriesLoading, setCategoriesLoading] = useState(true)
+  const { categories, categoriesLoading, categoriesError, retryCategories } = useCategories()
   const [coverFile, setCoverFile] = useState(null)
   const [coverPreview, setCoverPreview] = useState(null)
   const [coverError, setCoverError] = useState('')
   const [coverRemoved, setCoverRemoved] = useState(false)
-  const [initialImageUrl, setInitialImageUrl] = useState('')
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef(null)
 
@@ -54,13 +52,12 @@ export default function EditBlog() {
     axiosInstance
       .get(`/blogs/${id}`)
       .then(({ data }) => {
-        const imageUrl = data.cover_image_url ?? data.image_url ?? data.imageUrl ?? ''
+        const imageUrl = data.cover_image_url ?? ''
         setFields({
-          title:     data.title     ?? '',
-          category:  data.category  ?? data.tag ?? '',
-          content:   data.content   ?? data.body ?? '',
+          title: data.title ?? '',
+          categoryId: data.category?.id ?? '',
+          content: data.content ?? '',
         })
-        setInitialImageUrl(imageUrl)
         setCoverPreview(imageUrl || null)
         setCoverRemoved(false)
       })
@@ -74,22 +71,13 @@ export default function EditBlog() {
     }
   }, [coverPreview])
 
-  // Fetch categories from GET /categories; fall back to hardcoded list.
-  useEffect(() => {
-    axiosInstance
-      .get('/categories')
-      .then(({ data }) => {
-        const list  = Array.isArray(data) ? data : (data?.items ?? data?.categories ?? [])
-        const names = list.map((c) => (typeof c === 'string' ? c : (c.name ?? c.title ?? String(c))))
-        setCategories(names.length > 0 ? names : FALLBACK_CATEGORIES)
-      })
-      .catch(() => setCategories(FALLBACK_CATEGORIES))
-      .finally(() => setCategoriesLoading(false))
-  }, [])
-
   function handleChange(e) {
     const { name, value } = e.target
     setFields((prev) => ({ ...prev, [name]: value }))
+    if (name === 'categoryId' && errors.category) {
+      setErrors((prev) => ({ ...prev, category: '' }))
+      return
+    }
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }))
   }
 
@@ -153,7 +141,7 @@ export default function EditBlog() {
       if (coverFile) {
         const fd = new FormData()
         fd.append('title', fields.title.trim())
-        fd.append('category', fields.category)
+        fd.append('category_id', fields.categoryId)
         fd.append('content', fields.content.trim())
         fd.append('cover_image', coverFile)
         await axiosInstance.put(`/blogs/${id}`, fd, {
@@ -162,16 +150,15 @@ export default function EditBlog() {
       } else {
         await axiosInstance.put(`/blogs/${id}`, {
           title: fields.title.trim(),
-          category: fields.category,
+          category_id: fields.categoryId,
           content: fields.content.trim(),
-          image_url: coverRemoved ? '' : initialImageUrl,
+          remove_cover_image: coverRemoved,
         })
       }
       navigate(`/blogs/${id}`)
     } catch (err) {
       setServerError(
-        err.response?.data?.message ||
-        err.response?.data?.detail  ||
+        err.response?.data?.detail ||
         'Yazı güncellenemedi. Lütfen tekrar deneyin.'
       )
     } finally {
@@ -204,6 +191,19 @@ export default function EditBlog() {
           {serverError && (
             <div className="auth-server-error" role="alert">{serverError}</div>
           )}
+          {categoriesError && (
+            <div className="auth-server-error" role="alert">
+              {categoriesError}
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                style={{ marginLeft: 8 }}
+                onClick={retryCategories}
+              >
+                Tekrar Dene
+              </button>
+            </div>
+          )}
 
           {/* ── Title ──────────────────────────────────────────────── */}
           <div className="field-group">
@@ -234,20 +234,20 @@ export default function EditBlog() {
 
           {/* ── Category ───────────────────────────────────────────── */}
           <div className="field-group">
-            <label htmlFor="category" className="field-label">Kategori</label>
+            <label htmlFor="categoryId" className="field-label">Kategori</label>
             <select
-              id="category"
-              name="category"
-              value={fields.category}
+              id="categoryId"
+              name="categoryId"
+              value={fields.categoryId}
               onChange={handleChange}
-              disabled={categoriesLoading}
+              disabled={categoriesLoading || Boolean(categoriesError)}
               className={`field-input field-select${errors.category ? ' field-input--error' : ''}`}
             >
               <option value="" disabled>
-                {categoriesLoading ? 'Kategoriler yükleniyor…' : 'Kategori seçin…'}
+                {categoriesLoading ? 'Kategoriler yükleniyor…' : categoriesError ? 'Kategoriler yüklenemedi' : 'Kategori seçin…'}
               </option>
               {categories.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
             {errors.category && <p className="field-error">{errors.category}</p>}
@@ -270,7 +270,7 @@ export default function EditBlog() {
             {errors.content && <p className="field-error">{errors.content}</p>}
           </div>
 
-          <button type="submit" disabled={loading} className="auth-btn">
+          <button type="submit" disabled={loading || categoriesLoading || Boolean(categoriesError)} className="auth-btn">
             {loading ? 'Kaydediliyor…' : 'Güncelle'}
           </button>
         </form>

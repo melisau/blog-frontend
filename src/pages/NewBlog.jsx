@@ -3,9 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import axiosInstance from '../api/axiosInstance'
 import RichTextEditor from '../components/RichTextEditor'
 import CoverImageField from '../components/CoverImageField'
-
-const FALLBACK_CATEGORIES = ['Teknoloji', 'Genel', 'Yaşam', 'Eğitim', 'Spor', 'Seyahat', 'Yemek', 'Bilim']
-  .map((name) => ({ id: name, name }))
+import { useCategories } from '../hooks/useCategories'
 
 const MAX_TAGS = 5
 const MAX_TAG_LENGTH = 24
@@ -17,7 +15,7 @@ function validate(fields) {
     errors.title = 'Başlık zorunludur.'
   else if (fields.title.trim().length < 5)
     errors.title = 'Başlık en az 5 karakter olmalıdır.'
-  if (!fields.category)
+  if (!fields.categoryId)
     errors.category = 'Kategori seçimi zorunludur.'
   if (!fields.content.trim())
     errors.content = 'İçerik zorunludur.'
@@ -29,7 +27,7 @@ function validate(fields) {
 export default function NewBlog() {
   const navigate = useNavigate()
 
-  const [fields, setFields]         = useState({ title: '', category: '', content: '' })
+  const [fields, setFields]         = useState({ title: '', categoryId: '', content: '' })
   const [tags, setTags]             = useState([])
   const [tagInput, setTagInput]     = useState('')
   const [tagError, setTagError]     = useState('')
@@ -43,27 +41,10 @@ export default function NewBlog() {
   const [coverError, setCoverError]     = useState('')
   const [isDragging, setIsDragging]     = useState(false)
 
-  const [categories,        setCategories]        = useState([])
-  const [categoriesLoading, setCategoriesLoading] = useState(true)
+  const { categories, categoriesLoading, categoriesError, retryCategories } = useCategories()
 
   const tagInputRef  = useRef(null)
   const fileInputRef = useRef(null)
-
-  useEffect(() => {
-    axiosInstance
-      .get('/categories')
-      .then(({ data }) => {
-        const list = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.categories ?? [])
-        const mapped = list.map((c) =>
-          typeof c === 'string'
-            ? { id: c, name: c }
-            : { id: c.id ?? c._id ?? c.name ?? c.title ?? String(c), name: c.name ?? c.title ?? String(c) }
-        )
-        setCategories(mapped.length > 0 ? mapped : FALLBACK_CATEGORIES)
-      })
-      .catch(() => setCategories(FALLBACK_CATEGORIES))
-      .finally(() => setCategoriesLoading(false))
-  }, [])
 
   // Revoke preview URL when component unmounts or file changes to avoid memory leaks
   useEffect(() => {
@@ -75,6 +56,10 @@ export default function NewBlog() {
   function handleChange(e) {
     const { name, value } = e.target
     setFields((prev) => ({ ...prev, [name]: value }))
+    if (name === 'categoryId' && errors.category) {
+      setErrors((prev) => ({ ...prev, category: '' }))
+      return
+    }
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }))
   }
 
@@ -165,7 +150,7 @@ export default function NewBlog() {
       const fd = new FormData()
       fd.append('title',       fields.title.trim())
       fd.append('content',     fields.content.trim())
-      fd.append('category_id', fields.category)
+      fd.append('category_id', fields.categoryId)
       fd.append('tags',        JSON.stringify(tags))
       if (coverFile) fd.append('cover_image', coverFile)
 
@@ -202,6 +187,19 @@ export default function NewBlog() {
           {serverError && (
             <div className="auth-server-error" role="alert">{serverError}</div>
           )}
+          {categoriesError && (
+            <div className="auth-server-error" role="alert">
+              {categoriesError}
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                style={{ marginLeft: 8 }}
+                onClick={retryCategories}
+              >
+                Tekrar Dene
+              </button>
+            </div>
+          )}
 
           {/* ── Title ── */}
           <div className="field-group">
@@ -232,17 +230,17 @@ export default function NewBlog() {
 
           {/* ── Category ── */}
           <div className="field-group">
-            <label htmlFor="category" className="field-label">Kategori</label>
+            <label htmlFor="categoryId" className="field-label">Kategori</label>
             <select
-              id="category"
-              name="category"
-              value={fields.category}
+              id="categoryId"
+              name="categoryId"
+              value={fields.categoryId}
               onChange={handleChange}
-              disabled={categoriesLoading}
+              disabled={categoriesLoading || Boolean(categoriesError)}
               className={`field-input field-select${errors.category ? ' field-input--error' : ''}`}
             >
               <option value="" disabled>
-                {categoriesLoading ? 'Kategoriler yükleniyor…' : 'Kategori seçin…'}
+                {categoriesLoading ? 'Kategoriler yükleniyor…' : categoriesError ? 'Kategoriler yüklenemedi' : 'Kategori seçin…'}
               </option>
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.id}>{cat.name}</option>
@@ -319,7 +317,7 @@ export default function NewBlog() {
             {tagError && <p className="field-error">{tagError}</p>}
           </div>
 
-          <button type="submit" disabled={loading} className="auth-btn">
+          <button type="submit" disabled={loading || categoriesLoading || Boolean(categoriesError)} className="auth-btn">
             {loading ? 'Kaydediliyor…' : 'Yayınla'}
           </button>
         </form>

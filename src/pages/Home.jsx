@@ -5,8 +5,6 @@ import { useAuth } from '../context/AuthContext'
 import BlogCard from '../components/BlogCard'
 import SEO from '../components/SEO'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { extractTags } from '../utils/blogText'
-import { extractBlogList } from '../services/blogMapper'
 import { useInfiniteBlogs } from '../hooks/useInfiniteBlogs'
 
 // ── Page Component ───────────────────────────────────────────────────────────
@@ -34,21 +32,11 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false
     axiosInstance
-      .get('/blogs', { params: { limit: 100 } })
+      .get('/tags/top', { params: { limit: 10 } })
       .then(({ data }) => {
         if (cancelled) return
-        const list = extractBlogList(data)
-        const counts = new Map()
-        list.forEach((b) => {
-          extractTags(b).forEach((tag) => {
-            counts.set(tag, (counts.get(tag) ?? 0) + 1)
-          })
-        })
-        const stableTags = Array.from(counts.entries())
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 10)
-          .map(([tag]) => tag)
-        setRecentTags(stableTags)
+        const list = Array.isArray(data) ? data : []
+        setRecentTags(list.map((item) => item.name).filter(Boolean))
       })
       .catch(() => { /* silent fail */ })
     return () => { cancelled = true }
