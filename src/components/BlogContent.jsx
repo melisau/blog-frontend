@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import Avatar from './Avatar'
+import HeartIcon from './icons/HeartIcon'
 
 function looksLikeHtml(content) {
   return /<\/?[a-z][\s\S]*>/i.test(content ?? '')
@@ -233,6 +234,14 @@ export default function BlogContent({
       )}
 
       <div className="blog-article__meta">
+        <span
+          className="blog-card__stat blog-article__likes"
+          title="Beğeni sayısı"
+          aria-label={`Beğeni sayısı ${blog.favoriteCount ?? 0}`}
+        >
+          <HeartIcon size={18} />
+          <span>{blog.favoriteCount ?? 0}</span>
+        </span>
         <div className="blog-card__tags">
           {blog.category && (
             <Link

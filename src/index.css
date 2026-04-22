@@ -1617,6 +1617,11 @@ p {
   gap: 16px;
 }
 
+.blog-article__likes {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
 .blog-article__date {
   font-size: 13px;
   color: var(--text);

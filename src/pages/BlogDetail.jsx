@@ -41,6 +41,7 @@ function normalizeBlog(raw) {
     date:     dateRaw ? new Date(dateRaw).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) : '',
     author:   { id: authorId, username, iconId: authorIconId },
     imageUrl: resolveImageUrl(raw.cover_image_url ?? raw.image_url ?? raw.imageUrl ?? null),
+    favoriteCount: raw.favorite_count ?? raw.favorites_count ?? raw.like_count ?? raw.likes_count ?? 0,
   }
 }
 
@@ -138,16 +139,20 @@ export default function BlogDetail() {
 
   async function handleToggleFavorite() {
     if (favoriteLoading) return
+    const wasFavorited = isFavorited
     setFavoriteLoading(true)
+    setIsFavorited(!wasFavorited)
+    setBlog((prev) => prev ? { ...prev, favoriteCount: Math.max(0, (prev.favoriteCount ?? 0) + (wasFavorited ? -1 : 1)) } : prev)
     try {
-      if (isFavorited) {
+      if (wasFavorited) {
         await axiosInstance.delete(`/users/me/favorites/${id}`)
-        setIsFavorited(false)
       } else {
         await axiosInstance.post(`/users/me/favorites/${id}`)
-        setIsFavorited(true)
       }
-    } catch { /* toast shown by interceptor */ }
+    } catch {
+      setIsFavorited(wasFavorited)
+      setBlog((prev) => prev ? { ...prev, favoriteCount: Math.max(0, (prev.favoriteCount ?? 0) + (wasFavorited ? 1 : -1)) } : prev)
+    }
     finally { setFavoriteLoading(false) }
   }
 
