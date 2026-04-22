@@ -28,7 +28,7 @@ export default function Home() {
   const [recentTags, setRecentTags] = useState([])
   const [favoriteIds, setFavoriteIds] = useState(new Set())
   const [favoriteLoadingId, setFavoriteLoadingId] = useState(null)
-  const { blogs, loading, loadingMore, error, hasMore, loadMoreRef } = useInfiniteBlogs({
+  const { blogs, loading, loadingMore, error, hasMore, loadMoreRef, updateBlogById } = useInfiniteBlogs({
     batchSize: BATCH_SIZE,
     category: activeCategory,
     tag: activeTag,
@@ -85,19 +85,34 @@ export default function Home() {
     const key = String(blogId)
     const currentlyFavorited = favoriteIds.has(key)
     setFavoriteLoadingId(blogId)
+    setFavoriteIds((prev) => {
+      const next = new Set(prev)
+      if (currentlyFavorited) next.delete(key)
+      else next.add(key)
+      return next
+    })
+    updateBlogById(blogId, (blog) => ({
+      ...blog,
+      favoriteCount: Math.max(0, (blog.favoriteCount ?? 0) + (currentlyFavorited ? -1 : 1)),
+    }))
     try {
       if (currentlyFavorited) {
         await axiosInstance.delete(`/users/me/favorites/${blogId}`)
-        setFavoriteIds((prev) => {
-          const next = new Set(prev)
-          next.delete(key)
-          return next
-        })
       } else {
         await axiosInstance.post(`/users/me/favorites/${blogId}`)
-        setFavoriteIds((prev) => new Set(prev).add(key))
       }
-    } catch { /* toast interceptor handles */ }
+    } catch {
+      setFavoriteIds((prev) => {
+        const next = new Set(prev)
+        if (currentlyFavorited) next.add(key)
+        else next.delete(key)
+        return next
+      })
+      updateBlogById(blogId, (blog) => ({
+        ...blog,
+        favoriteCount: Math.max(0, (blog.favoriteCount ?? 0) + (currentlyFavorited ? 1 : -1)),
+      }))
+    }
     finally { setFavoriteLoadingId(null) }
   }
 

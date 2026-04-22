@@ -153,5 +153,16 @@ export function useInfiniteBlogs({ batchSize = 6, category, tag, query }) {
     return () => observerRef.current?.disconnect()
   }, [fetchBlogs, hasMore, loading, error])
 
-  return { blogs, loading, loadingMore, error, hasMore, loadMoreRef }
+  const updateBlogById = useCallback((blogId, updater) => {
+    const targetId = String(blogId)
+    setBlogs((prev) =>
+      prev.map((item) => {
+        if (String(item.id) !== targetId) return item
+        const next = typeof updater === 'function' ? updater(item) : { ...item, ...updater }
+        return next ?? item
+      })
+    )
+  }, [])
+
+  return { blogs, loading, loadingMore, error, hasMore, loadMoreRef, updateBlogById }
 }
