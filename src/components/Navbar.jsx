@@ -3,6 +3,7 @@
 // Guest:          [Hamburger(mobile)]  [Logo]  ···  [Giriş Yap]  [Kayıt Ol]
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
+import axiosInstance from '../api/axiosInstance'
 import { useAuth } from '../context/AuthContext'
 import { useSidebar } from '../context/SidebarContext'
 import { useTheme } from '../context/ThemeContext'
@@ -60,15 +61,56 @@ export default function Navbar() {
 
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [categoryLinks, setCategoryLinks] = useState([{ label: 'Tümü', value: null }])
+  const [unreadCount, setUnreadCount] = useState(0)
   const wrapRef = useRef(null)
 
   const displayName = user?.username ?? user?.name ?? user?.full_name ?? null
   const maskedEmail = maskEmail(user?.email ?? null)
+  const activeCategory = new URLSearchParams(location.search).get('category')
 
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     setSearch(params.get('q') ?? '')
   }, [location.search])
+
+  useEffect(() => {
+    let cancelled = false
+    axiosInstance
+      .get('/categories')
+      .then(({ data }) => {
+        if (cancelled) return
+        const list = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.categories ?? [])
+        const mapped = list
+          .map((c) => (typeof c === 'string' ? c : (c.name ?? c.title ?? null)))
+          .filter(Boolean)
+          .map((name) => ({ label: name, value: name }))
+        setCategoryLinks([{ label: 'Tümü', value: null }, ...mapped])
+      })
+      .catch(() => {
+        if (cancelled) return
+        setCategoryLinks([{ label: 'Tümü', value: null }])
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setUnreadCount(0)
+      return
+    }
+    let cancelled = false
+    axiosInstance
+      .get('/notifications/unread-count')
+      .then(({ data }) => {
+        if (cancelled) return
+        setUnreadCount(Number(data?.unread_count ?? 0))
+      })
+      .catch(() => {
+        if (!cancelled) setUnreadCount(0)
+      })
+    return () => { cancelled = true }
+  }, [isAuthenticated])
 
   function handleLogout() {
     setOpen(false)
@@ -80,6 +122,16 @@ export default function Navbar() {
     e.preventDefault()
     const q = search.trim()
     navigate(q ? `/?q=${encodeURIComponent(q)}` : '/')
+  }
+
+  async function handleNotificationClick() {
+    if (!isAuthenticated) return
+    try {
+      await axiosInstance.post('/notifications/mark-read')
+      setUnreadCount(0)
+    } catch {
+      // noop
+    }
   }
 
   // Close dropdown when clicking outside
@@ -124,19 +176,52 @@ export default function Navbar() {
         Fitbook
       </Link>
 
-      <form className="navbar__search" onSubmit={handleSearchSubmit} role="search" aria-label="Yazılarda ara">
-        <input
-          type="search"
-          className="navbar__search-input"
-          placeholder="Yazılarda ara..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </form>
+      <div className="navbar__center">
+        <form className="navbar__search" onSubmit={handleSearchSubmit} role="search" aria-label="Yazılarda ara">
+          <input
+            type="search"
+            className="navbar__search-input"
+            placeholder="Yazılarda ara..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </form>
+        <nav className="navbar__categories" aria-label="Kategoriler">
+          {categoryLinks.map((item) => {
+            const isActive = (item.value === null && !activeCategory) || item.value === activeCategory
+            const href = item.value ? `/?category=${encodeURIComponent(item.value)}` : '/'
+            return (
+              <Link
+                key={item.label}
+                to={href}
+                className={`navbar__category-link${isActive ? ' navbar__category-link--active' : ''}`}
+              >
+                {item.label}
+              </Link>
+            )
+          })}
+        </nav>
+      </div>
 
       {/* ── Right side ────────────────────────────────────────── */}
       {isAuthenticated ? (
         <div className="navbar__right">
+          <button
+            type="button"
+            className="navbar__notification-btn"
+            aria-label="Bildirimler"
+            title="Bildirimler"
+            onClick={handleNotificationClick}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            {unreadCount > 0 && (
+              <span className="navbar__notification-dot" aria-hidden="true" />
+            )}
+          </button>
           {/* Create new post button (+ icon) */}
           <Link
             to="/new-blog"
