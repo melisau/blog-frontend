@@ -2,6 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import axiosInstance from '../api/axiosInstance'
 import { extractBlogList, normalizeBlogs } from '../services/blogMapper'
 
+function normalizeTagValue(value) {
+  return String(value ?? '').trim().toLocaleLowerCase('tr')
+}
+
+function matchesActiveTag(blog, activeTag) {
+  const wantedTag = normalizeTagValue(activeTag)
+  if (!wantedTag) return true
+  const tags = Array.isArray(blog?.tags) ? blog.tags : []
+  return tags.some((item) => normalizeTagValue(item) === wantedTag)
+}
+
 export function useInfiniteBlogs({ batchSize = 6, category, tag, query }) {
   const [blogs, setBlogs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -82,13 +93,16 @@ export function useInfiniteBlogs({ batchSize = 6, category, tag, query }) {
 
       const { data } = await axiosInstance.get('/blogs', { params })
       const normalized = normalizeBlogs(data)
+      const visibleBlogs = tag
+        ? normalized.filter((item) => matchesActiveTag(item, tag))
+        : normalized
       const rawList = extractBlogList(data)
 
       setBlogs((prev) => {
-        if (reset) return normalized
+        if (reset) return visibleBlogs
         const seen = new Set(prev.map((item) => String(item.id)))
         const next = [...prev]
-        normalized.forEach((item) => {
+        visibleBlogs.forEach((item) => {
           const id = String(item.id)
           if (!seen.has(id)) {
             seen.add(id)
@@ -103,7 +117,7 @@ export function useInfiniteBlogs({ batchSize = 6, category, tag, query }) {
       hasMoreRef.current = nextHasMore
       skipRef.current = (reset ? 0 : skipRef.current) + batchSize
 
-      hydrateAuthors(normalized).then((hydrated) => {
+      hydrateAuthors(visibleBlogs).then((hydrated) => {
         if (requestSeqRef.current !== currentRequest) return
         setBlogs((prev) => {
           const byId = new Map(hydrated.map((item) => [String(item.id), item]))

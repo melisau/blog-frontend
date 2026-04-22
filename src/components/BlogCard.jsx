@@ -3,7 +3,14 @@ import Avatar from './Avatar'
 import HeartIcon from './icons/HeartIcon'
 import BlogCardStats from './BlogCardStats'
 
-export default function BlogCard({ blog, isAuthenticated = false, isFavorited = false, favoriteLoading = false, onToggleFavorite }) {
+export default function BlogCard({
+  blog,
+  isAuthenticated = false,
+  isFavorited = false,
+  favoriteLoading = false,
+  onToggleFavorite,
+  getTagHref,
+}) {
   const navigate = useNavigate()
 
   return (
@@ -71,7 +78,7 @@ export default function BlogCard({ blog, isAuthenticated = false, isFavorited = 
           {blog.tags.map((t, i) => (
             <Link
               key={`${t}-${i}`}
-              to={`/?tag=${encodeURIComponent(t)}`}
+              to={getTagHref ? getTagHref(t) : `/?tag=${encodeURIComponent(t)}`}
               className="blog-card__tag blog-card__tag--outline blog-card__tag--link"
               onClick={(e) => e.stopPropagation()}
             >

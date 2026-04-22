@@ -9,6 +9,10 @@ import { extractTags } from '../utils/blogText'
 import { extractBlogList } from '../services/blogMapper'
 import { useInfiniteBlogs } from '../hooks/useInfiniteBlogs'
 
+function normalizeTagValue(value) {
+  return String(value ?? '').trim().toLocaleLowerCase('tr')
+}
+
 // ── Page Component ───────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -98,6 +102,12 @@ export default function Home() {
   }
 
   const uniqueRecentTags = [...new Set(recentTags.map((tag) => String(tag).trim()).filter(Boolean))]
+  const getTagHref = (tagName) => {
+    const normalizedActive = normalizeTagValue(activeTag)
+    const normalizedClicked = normalizeTagValue(tagName)
+    if (normalizedActive && normalizedClicked === normalizedActive) return '/'
+    return `/?tag=${encodeURIComponent(tagName)}`
+  }
 
   return (
     <div className="page-container">
@@ -155,6 +165,7 @@ export default function Home() {
                     isFavorited={favoriteIds.has(String(blog.id))}
                     favoriteLoading={favoriteLoadingId === blog.id}
                     onToggleFavorite={handleToggleFavorite}
+                    getTagHref={getTagHref}
                   />
                 ))}
               </div>
@@ -176,7 +187,7 @@ export default function Home() {
                 {uniqueRecentTags.map((tag, i) => (
                   <Link
                     key={`${tag}-${i}`}
-                    to={`/?tag=${encodeURIComponent(tag)}`}
+                    to={getTagHref(tag)}
                     className="tags-sidebar__tag tags-sidebar__tag--link"
                   >
                     #{tag}
