@@ -242,9 +242,9 @@ export default function BlogContent({
               {blog.category}
             </Link>
           )}
-          {blog.tags.map((t) => (
+          {blog.tags.map((t, i) => (
             <Link
-              key={t}
+              key={`${t}-${i}`}
               to={`/?tag=${encodeURIComponent(t)}`}
               className="blog-card__tag blog-card__tag--outline blog-card__tag--link"
             >

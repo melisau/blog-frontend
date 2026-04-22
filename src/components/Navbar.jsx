@@ -144,6 +144,131 @@ export default function Navbar() {
     return type === 'follow' ? 'Takip' : 'Yorum'
   }
 
+  function getNotificationTarget(item) {
+    if (!item) return null
+    const type = String(item.type ?? '').toLowerCase()
+    const isCommentType = type.includes('comment')
+    const isFollowType = type.includes('follow')
+    const isNavigableType = isCommentType || isFollowType
+
+    function parseTargetPath(value) {
+      if (typeof value !== 'string' || !value.trim()) return null
+      let path = value.trim()
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        try {
+          path = new URL(path).pathname
+        } catch {
+          return null
+        }
+      }
+      const blogMatch = path.match(/\/blogs\/([^/?#]+)/)
+      if (blogMatch) return `/blogs/${blogMatch[1]}`
+      const profileMatch = path.match(/\/profile\/([^/?#]+)/)
+      if (profileMatch) return `/profile/${profileMatch[1]}`
+      const usersMatch = path.match(/\/users\/([^/?#]+)/)
+      if (usersMatch) return `/profile/${usersMatch[1]}`
+      return null
+    }
+
+    function pickId(...values) {
+      for (const value of values) {
+        if (value == null) continue
+        const str = String(value).trim()
+        if (str) return str
+      }
+      return null
+    }
+
+    function extractIdFromText(value) {
+      if (typeof value !== 'string') return null
+      // ObjectId, uuid-like or numeric tail support
+      const objectId = value.match(/\b[a-f0-9]{24}\b/i)
+      if (objectId) return objectId[0]
+      const uuid = value.match(/\b[a-f0-9]{8}-[a-f0-9-]{27}\b/i)
+      if (uuid) return uuid[0]
+      const numeric = value.match(/(?:^|\/)(\d+)(?:$|[^\d])/)
+      if (numeric) return numeric[1]
+      return null
+    }
+
+    const routeTarget =
+      parseTargetPath(item.target_url) ??
+      parseTargetPath(item.url) ??
+      parseTargetPath(item.link) ??
+      parseTargetPath(item.href) ??
+      parseTargetPath(item.path) ??
+      parseTargetPath(item.redirect_to) ??
+      parseTargetPath(item?.data?.target_url) ??
+      parseTargetPath(item?.data?.url)
+    if (routeTarget) return routeTarget
+
+    if (isCommentType) {
+      const blogId = pickId(
+        item.blog_id,
+        item.post_id,
+        item.blogId,
+        item.postId,
+        item.entity_id,
+        item.target_id,
+        item.reference_id,
+        item.related_id,
+        item.blog?.id,
+        item.post?.id,
+        item?.data?.blog_id,
+        item?.data?.post_id,
+        item?.data?.blogId,
+        item?.data?.postId,
+        item?.data?.entity_id,
+        extractIdFromText(item.message),
+      )
+      if (blogId != null) return `/blogs/${blogId}`
+    }
+
+    if (isFollowType) {
+      const profileId = pickId(
+        item.actor?.id,
+        item.actor?._id,
+        item?.data?.actor?.id,
+        item?.data?.actor?._id,
+        item.actor_id,
+        item.user_id,
+        item.from_user_id,
+        item.source_user_id,
+        item.sender_id,
+        item.follower_id,
+        item.entity_id,
+        item.fromUserId,
+        item.related_user_id,
+        item.target_id,
+        item.reference_id,
+        item.follower?.id,
+        item.from_user?.id,
+        item?.data?.actor_id,
+        item?.data?.user_id,
+        item?.data?.follower_id,
+        item?.data?.from_user_id,
+        item?.data?.related_user_id,
+        item.userId,
+        extractIdFromText(item.message),
+      )
+      if (profileId != null) return `/profile/${profileId}`
+    }
+
+    return isNavigableType ? '#' : null
+  }
+
+  function getNotificationActorName(item) {
+    return item?.actor?.username ?? item?.username ?? item?.from_username ?? item?.sender_username ?? null
+  }
+
+  function formatNotificationMessage(item) {
+    const actorName = getNotificationActorName(item)
+    const type = String(item?.type ?? '').toLowerCase()
+    if (actorName && type.includes('comment')) return `${actorName} yazınıza yorum ekledi`
+    if (actorName && type.includes('follow')) return `${actorName} sizi takip etmeye başladı`
+    return item?.message ?? ''
+  }
+
   function NotificationTypeIcon({ type }) {
     if (type === 'follow') {
       return (
@@ -180,6 +305,13 @@ export default function Navbar() {
     } finally {
       setNotificationsLoading(false)
     }
+  }
+
+  function handleNotificationNavigate(item) {
+    const target = getNotificationTarget(item)
+    if (!target || target === '#') return
+    setNotificationOpen(false)
+    navigate(target)
   }
 
   // Close dropdown when clicking outside
@@ -285,23 +417,37 @@ export default function Navbar() {
                   <p className="navbar__notification-empty">Yeni bildiriminiz yok.</p>
                 ) : (
                   <div className="navbar__notification-list">
-                    {notifications.map((item) => (
-                      <div key={item.id} className={`navbar__notification-item${item.read ? ' navbar__notification-item--read' : ''}`}>
+                    {notifications.map((item, i) => {
+                      const target = getNotificationTarget(item)
+                      const itemType = String(item?.type ?? '').toLowerCase()
+                      const isInteractive = itemType.includes('comment') || itemType.includes('follow')
+                      return (
+                      <div
+                        key={item.id ?? `${item.type}-${i}`}
+                        className={`navbar__notification-item${item.read ? ' navbar__notification-item--read' : ''}${isInteractive ? ' navbar__notification-item--clickable' : ''}`}
+                        role={isInteractive ? 'button' : undefined}
+                        tabIndex={isInteractive ? 0 : undefined}
+                        onClick={() => handleNotificationNavigate(item)}
+                        onKeyDown={(e) => {
+                          if (!isInteractive) return
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            handleNotificationNavigate(item)
+                          }
+                        }}
+                      >
                         <div className={`navbar__notification-icon navbar__notification-icon--${item.type}`}>
                           <NotificationTypeIcon type={item.type} />
                         </div>
                         <div className="navbar__notification-content">
                           <div className="navbar__notification-head">
                             <span className="navbar__notification-kind">{notificationTypeLabel(item.type)}</span>
-                            <span className={`navbar__notification-status${item.read ? ' navbar__notification-status--read' : ''}`}>
-                              {item.read ? 'Okundu' : 'Yeni'}
-                            </span>
                           </div>
-                          <p className="navbar__notification-message">{item.message}</p>
+                          <p className="navbar__notification-message">{formatNotificationMessage(item)}</p>
                           <span className="navbar__notification-time">{formatNotificationDate(item.created_at)}</span>
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 )}
               </div>

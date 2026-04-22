@@ -118,8 +118,8 @@ export default function Library() {
                   {blog.category && (
                     <span className="blog-card__tag">{blog.category}</span>
                   )}
-                  {blog.tags.map((t) => (
-                    <span key={t} className="blog-card__tag blog-card__tag--outline">#{t}</span>
+                  {blog.tags.map((t, i) => (
+                    <span key={`${t}-${i}`} className="blog-card__tag blog-card__tag--outline">#{t}</span>
                   ))}
                   {!blog.category && blog.tags.length === 0 && (
                     <span className="blog-card__tag">Genel</span>
