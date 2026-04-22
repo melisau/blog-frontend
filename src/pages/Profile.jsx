@@ -152,15 +152,9 @@ export default function Profile() {
           return total
         }
 
-        try {
-          return await countFromEndpoint((skip, limit) =>
-            axiosInstance.get(`/users/${id}/blogs`, { params: { skip, limit } })
-          )
-        } catch {
-          return countFromEndpoint((skip, limit) =>
-            axiosInstance.get('/blogs', { params: { author_id: id, skip, limit } })
-          )
-        }
+        return countFromEndpoint((skip, limit) =>
+          axiosInstance.get('/blogs', { params: { author_id: id, skip, limit } })
+        )
       }
 
       try {
@@ -323,15 +317,14 @@ export default function Profile() {
   }, [id])
 
   // Fetch this user's blogs after the id is known.
-  // Tries /users/:id/blogs first; falls back to /blogs?author_id=:id.
+  // Uses /blogs?author_id=:id for backend compatibility.
   useEffect(() => {
     let cancelled = false
     setBlogsLoading(true)
     setBlogsError('')
 
     axiosInstance
-      .get(`/users/${id}/blogs`)
-      .catch(() => axiosInstance.get(`/blogs?author_id=${id}`))  // fallback
+      .get(`/blogs?author_id=${id}`)
       .then(({ data }) => {
         if (cancelled) return
         const list = normalizeBlogs(data, 120).filter((b) => {

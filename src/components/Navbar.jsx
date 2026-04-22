@@ -85,10 +85,10 @@ export default function Navbar() {
       .then(({ data }) => {
         if (cancelled) return
         const list = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.categories ?? [])
-        const mapped = list
+        const mapped = [...new Set(list
           .map((c) => (typeof c === 'string' ? c : (c.name ?? c.title ?? null)))
           .filter(Boolean)
-          .map((name) => ({ label: name, value: name }))
+        )].map((name) => ({ label: name, value: name }))
         setCategoryLinks([{ label: 'Tümü', value: null }, ...mapped])
       })
       .catch(() => {

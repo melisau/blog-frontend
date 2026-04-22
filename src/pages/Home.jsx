@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import BlogCard from '../components/BlogCard'
 import SEO from '../components/SEO'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { extractTags } from '../utils/blogText'
+import { extractBlogList } from '../services/blogMapper'
 import { useInfiniteBlogs } from '../hooks/useInfiniteBlogs'
 
 // ── Page Component ───────────────────────────────────────────────────────────
@@ -31,14 +33,29 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false
-    axiosInstance
-      .get('/tags/top', { params: { limit: 10 } })
-      .then(({ data }) => {
+
+    async function fetchRecentTags() {
+      try {
+        const { data } = await axiosInstance.get('/blogs', { params: { limit: 100 } })
         if (cancelled) return
-        const list = Array.isArray(data) ? data : []
-        setRecentTags(list.map((item) => item.name).filter(Boolean))
-      })
-      .catch(() => { /* silent fail */ })
+        const list = extractBlogList(data)
+        const counts = new Map()
+        list.forEach((b) => {
+          extractTags(b).forEach((tag) => {
+            counts.set(tag, (counts.get(tag) ?? 0) + 1)
+          })
+        })
+        const stableTags = Array.from(counts.entries())
+          .sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]), 'tr'))
+          .slice(0, 10)
+          .map(([tag]) => tag)
+        setRecentTags(stableTags)
+      } catch {
+        if (!cancelled) setRecentTags([])
+      }
+    }
+
+    fetchRecentTags()
     return () => { cancelled = true }
   }, [])
 
@@ -79,6 +96,8 @@ export default function Home() {
     } catch { /* toast interceptor handles */ }
     finally { setFavoriteLoadingId(null) }
   }
+
+  const uniqueRecentTags = [...new Set(recentTags.map((tag) => String(tag).trim()).filter(Boolean))]
 
   return (
     <div className="page-container">
@@ -152,11 +171,11 @@ export default function Home() {
         <aside className="tags-sidebar" aria-label="Güncel etiketler">
           <div className="tags-sidebar__inner">
             <h2 className="tags-sidebar__title">Güncel Etiketler</h2>
-            {recentTags.length > 0 ? (
+            {uniqueRecentTags.length > 0 ? (
               <div className="tags-sidebar__list">
-                {recentTags.map((tag) => (
+                {uniqueRecentTags.map((tag, i) => (
                   <Link
-                    key={tag}
+                    key={`${tag}-${i}`}
                     to={`/?tag=${encodeURIComponent(tag)}`}
                     className="tags-sidebar__tag tags-sidebar__tag--link"
                   >
