@@ -44,6 +44,7 @@ Modern, tek sayfa (SPA) bir **blog platformu** için React tabanlı frontend uyg
 - **Blog CRUD:** Kapak görseli yüklemeli yeni blog oluşturma, düzenleme ve silme.
 - **Zengin metin editörü:** `RichTextEditor` bileşeni ile format'lı yazı.
 - **Kategoriler & etiketler:** Kategoriye veya etikete göre filtreleme (`?category=...&tag=...`).
+- **Etiket toggle davranışı:** Ana sayfada veya "Güncel Etiketler" alanında aktif etikete tekrar tıklanınca `tag` query'si kaldırılır ve filtre temizlenir.
 - **Sonsuz kaydırma:** `useInfiniteBlogs` hook'u ile sayfalanmış blog yükleme.
 - **Favoriler / beğeni:** Kullanıcıların favori listesi (`/library`).
 - **Takip sistemi:** Yazar takibi + `/following` akışı + takipçi/takip edilen listeleri.
@@ -202,6 +203,18 @@ blog-frontend/
 | `/new-blog` | Private | `NewBlog` |
 | `/edit-blog/:id` | Private | `EditBlog` |
 | `*` | — | `/`'e yönlendirir |
+
+`Home` route'u query parametreleriyle filtrelemeyi destekler:
+
+- `/?category=<name>`
+- `/?tag=<name>`
+- `/?q=<search>`
+
+Etiket filtreleme akışı:
+
+- Kart etiket rozetleri (`BlogCard`) ve yan panel "Güncel Etiketler" aynı `tag` query'sine yazar.
+- Aynı etiket tekrar tıklanırsa `tag` query'si kaldırılır (toggle).
+- `useInfiniteBlogs` hem backend'e `tag` parametresi gönderir hem de dönen listede güvenli istemci tarafı etiket kontrolü uygular.
 
 ---
 
