@@ -60,10 +60,14 @@ export default function Navbar() {
   const location = useLocation()
 
   const [open, setOpen] = useState(false)
+  const [notificationOpen, setNotificationOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [categoryLinks, setCategoryLinks] = useState([{ label: 'Tümü', value: null }])
   const [unreadCount, setUnreadCount] = useState(0)
+  const [notifications, setNotifications] = useState([])
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
   const wrapRef = useRef(null)
+  const notificationWrapRef = useRef(null)
 
   const displayName = user?.username ?? user?.name ?? user?.full_name ?? null
   const maskedEmail = maskEmail(user?.email ?? null)
@@ -124,27 +128,74 @@ export default function Navbar() {
     navigate(q ? `/?q=${encodeURIComponent(q)}` : '/')
   }
 
+  function formatNotificationDate(value) {
+    if (!value) return ''
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return ''
+    return d.toLocaleString('tr-TR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  function notificationTypeLabel(type) {
+    return type === 'follow' ? 'Takip' : 'Yorum'
+  }
+
+  function NotificationTypeIcon({ type }) {
+    if (type === 'follow') {
+      return (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="8.5" cy="7" r="4"/>
+          <path d="M20 8v6M23 11h-6"/>
+        </svg>
+      )
+    }
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+    )
+  }
+
   async function handleNotificationClick() {
     if (!isAuthenticated) return
+    const nextOpen = !notificationOpen
+    setNotificationOpen(nextOpen)
+    if (!nextOpen) return
+    setOpen(false)
+    setNotificationsLoading(true)
     try {
+      const { data } = await axiosInstance.get('/notifications')
+      const items = Array.isArray(data?.items) ? data.items : []
+      setNotifications(items)
       await axiosInstance.post('/notifications/mark-read')
       setUnreadCount(0)
+      setNotifications((prev) => prev.map((item) => ({ ...item, read: true })))
     } catch {
-      // noop
+      setNotifications([])
+    } finally {
+      setNotificationsLoading(false)
     }
   }
 
   // Close dropdown when clicking outside
   useEffect(() => {
-    if (!open) return
+    if (!open && !notificationOpen) return
     function onPointerDown(e) {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) {
         setOpen(false)
       }
+      if (notificationWrapRef.current && !notificationWrapRef.current.contains(e.target)) {
+        setNotificationOpen(false)
+      }
     }
     document.addEventListener('pointerdown', onPointerDown)
     return () => document.removeEventListener('pointerdown', onPointerDown)
-  }, [open])
+  }, [open, notificationOpen])
 
   return (
     <header className="navbar">
@@ -206,22 +257,56 @@ export default function Navbar() {
       {/* ── Right side ────────────────────────────────────────── */}
       {isAuthenticated ? (
         <div className="navbar__right">
-          <button
-            type="button"
-            className="navbar__notification-btn"
-            aria-label="Bildirimler"
-            title="Bildirimler"
-            onClick={handleNotificationClick}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-            </svg>
-            {unreadCount > 0 && (
-              <span className="navbar__notification-dot" aria-hidden="true" />
+          <div className="navbar__notification-wrap" ref={notificationWrapRef}>
+            <button
+              type="button"
+              className="navbar__notification-btn"
+              aria-label="Bildirimler"
+              title="Bildirimler"
+              onClick={handleNotificationClick}
+              aria-expanded={notificationOpen}
+              aria-haspopup="true"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
+              {unreadCount > 0 && (
+                <span className="navbar__notification-dot" aria-hidden="true" />
+              )}
+            </button>
+            {notificationOpen && (
+              <div className="navbar__notification-panel" role="dialog" aria-label="Bildirimler">
+                <div className="navbar__notification-title">Bildirimler</div>
+                {notificationsLoading ? (
+                  <p className="navbar__notification-empty">Yükleniyor…</p>
+                ) : notifications.length === 0 ? (
+                  <p className="navbar__notification-empty">Yeni bildiriminiz yok.</p>
+                ) : (
+                  <div className="navbar__notification-list">
+                    {notifications.map((item) => (
+                      <div key={item.id} className={`navbar__notification-item${item.read ? ' navbar__notification-item--read' : ''}`}>
+                        <div className={`navbar__notification-icon navbar__notification-icon--${item.type}`}>
+                          <NotificationTypeIcon type={item.type} />
+                        </div>
+                        <div className="navbar__notification-content">
+                          <div className="navbar__notification-head">
+                            <span className="navbar__notification-kind">{notificationTypeLabel(item.type)}</span>
+                            <span className={`navbar__notification-status${item.read ? ' navbar__notification-status--read' : ''}`}>
+                              {item.read ? 'Okundu' : 'Yeni'}
+                            </span>
+                          </div>
+                          <p className="navbar__notification-message">{item.message}</p>
+                          <span className="navbar__notification-time">{formatNotificationDate(item.created_at)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
-          </button>
+          </div>
           {/* Create new post button (+ icon) */}
           <Link
             to="/new-blog"

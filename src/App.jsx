@@ -18,6 +18,7 @@ import BlogDetail from './pages/BlogDetail'
 import NewBlog from './pages/NewBlog'
 import EditBlog from './pages/EditBlog'
 import Profile from './pages/Profile'
+import ProfileConnections from './pages/ProfileConnections'
 import Library from './pages/Library'
 import Following from './pages/Following'
 import Login from './pages/Login'
@@ -35,6 +36,8 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/blogs/:id" element={<BlogDetail />} />
             <Route path="/profile/:id" element={<Profile />} />
+            <Route path="/profile/:id/following" element={<ProfileConnections />} />
+            <Route path="/profile/:id/followers" element={<ProfileConnections />} />
 
             {/* Guest-only routes: redirect to / when already logged in */}
             <Route path="/login"    element={<GuestRoute><Login /></GuestRoute>} />

@@ -42,6 +42,8 @@ function normalizeUser(raw) {
     iconId:       raw.icon_id ?? raw.iconId ?? null,
     blogCount:    raw.post_count  ?? raw.postCount  ?? raw.blog_count ?? raw.blogCount ?? 0,
     commentCount: raw.comment_count ?? raw.commentCount ?? 0,
+    followingCount: raw.following_count ?? raw.followingCount ?? 0,
+    followerCount: raw.followers_count ?? raw.followerCount ?? raw.followersCount ?? 0,
   }
 }
 
@@ -70,7 +72,7 @@ export default function Profile() {
   // ── Follow state ──────────────────────────────────────────────────────────
   const [isFollowing,     setIsFollowing]     = useState(false)
   const [followLoading,   setFollowLoading]   = useState(false)
-
+  const [followCountsLoading, setFollowCountsLoading] = useState(true)
   // ── Edit mode state ───────────────────────────────────────────────────────
   const [editMode,      setEditMode]      = useState(false)
   const [editFields,    setEditFields]    = useState({ username: '', bio: '' })
@@ -94,6 +96,59 @@ export default function Profile() {
       .catch(() => {})
     return () => { cancelled = true }
   }, [id, isAuthenticated, isOwnProfile])
+
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    setFollowCountsLoading(true)
+
+    async function fetchConnectionCount(type) {
+      const pageSize = 100
+      let skip = 0
+      let total = 0
+
+      // Fallback strategy:
+      // 1) If API returns metadata count/total, use it directly.
+      // 2) Otherwise, count by paging through all results.
+      for (let i = 0; i < 100; i += 1) {
+        const { data } = await axiosInstance.get(`/users/${id}/${type}`, {
+          params: { skip, limit: pageSize },
+        })
+        const countFromMeta = Number(
+          data?.total ??
+          data?.count ??
+          data?.total_count ??
+          data?.totalCount ??
+          data?.pagination?.total ??
+          data?.meta?.total ??
+          NaN,
+        )
+        if (Number.isFinite(countFromMeta)) return countFromMeta
+
+        const list = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.data ?? [])
+        total += list.length
+        if (list.length < pageSize) break
+        skip += list.length
+      }
+
+      return total
+    }
+
+    Promise.all([
+      fetchConnectionCount('following'),
+      fetchConnectionCount('followers'),
+    ])
+      .then(([followingCount, followerCount]) => {
+        if (cancelled) return
+        setProfileUser((prev) => prev ? { ...prev, followingCount, followerCount } : prev)
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setFollowCountsLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [id, isFollowing])
 
   async function handleToggleFollow() {
     if (followLoading) return
@@ -457,6 +512,16 @@ export default function Profile() {
                   </div>
                 </>
               )}
+              <div className="profile-stat__divider" />
+              <Link to={`/profile/${id}/following`} className="profile-stat profile-stat--link">
+                <span className="profile-stat__value">{followCountsLoading ? '…' : profileUser.followingCount}</span>
+                <span className="profile-stat__label">Takip</span>
+              </Link>
+              <div className="profile-stat__divider" />
+              <Link to={`/profile/${id}/followers`} className="profile-stat profile-stat--link">
+                <span className="profile-stat__value">{followCountsLoading ? '…' : profileUser.followerCount}</span>
+                <span className="profile-stat__label">Takipçi</span>
+              </Link>
             </div>
           </div>
         </div>

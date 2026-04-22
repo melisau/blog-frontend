@@ -205,6 +205,10 @@ body {
   gap: 8px;
 }
 
+.navbar__notification-wrap {
+  position: relative;
+}
+
 .navbar__notification-btn {
   width: 40px;
   height: 40px;
@@ -234,6 +238,122 @@ body {
   height: 8px;
   border-radius: 8px;
   background: var(--success);
+}
+
+.navbar__notification-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  padding: 12px;
+  z-index: 350;
+}
+
+.navbar__notification-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-h);
+  margin-bottom: 8px;
+}
+
+.navbar__notification-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+  padding: 8px 0;
+}
+
+.navbar__notification-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.navbar__notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-alt);
+  padding: 8px;
+}
+
+.navbar__notification-item--read {
+  opacity: 0.9;
+}
+
+.navbar__notification-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.navbar__notification-icon--comment {
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-alt));
+  color: var(--accent);
+}
+
+.navbar__notification-icon--follow {
+  background: color-mix(in srgb, var(--success) 16%, var(--bg-alt));
+  color: var(--success);
+}
+
+.navbar__notification-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.navbar__notification-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.navbar__notification-kind {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.navbar__notification-status {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-radius: 8px;
+  padding: 2px 6px;
+}
+
+.navbar__notification-status--read {
+  color: var(--text);
+  background: color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.navbar__notification-message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-h);
+  margin-top: 4px;
+}
+
+.navbar__notification-time {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text);
 }
 
 /* New post button (+) */
@@ -538,6 +658,9 @@ body {
   .navbar__notification-btn {
     display: none;
   }
+  .navbar__notification-panel {
+    display: none;
+  }
 
   .navbar__hamburger {
     display: flex;
@@ -809,6 +932,17 @@ body {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--bg);
+}
+
+.following-card--link {
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.following-card--link:hover {
+  border-color: var(--accent-border);
+  background: var(--bg-alt);
 }
 
 .following-card--skeleton {
@@ -1686,6 +1820,71 @@ p {
   margin-top: 8px;
 }
 
+.profile-follow-lists {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+  margin-bottom: 24px;
+}
+
+@media (min-width: 768px) {
+  .profile-follow-lists {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.profile-follow-list {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-alt);
+  padding: 16px;
+}
+
+.profile-follow-list__title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.profile-follow-list__items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-follow-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text-h);
+  transition: background 0.15s, color 0.15s;
+}
+
+.profile-follow-item:hover {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.profile-follow-item__name {
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-follow-list__empty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
 @media (max-width: 600px) {
   .profile-card {
     flex-direction: column;
@@ -2354,6 +2553,19 @@ p {
   flex-direction: column;
   align-items: center;
   gap: 2px;
+}
+
+.profile-stat--link {
+  text-decoration: none;
+  color: inherit;
+  border-radius: 10px;
+  padding: 6px 8px;
+  margin: -6px -8px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.profile-stat--link:hover {
+  background: var(--accent-bg);
 }
 
 .profile-stat__value {
