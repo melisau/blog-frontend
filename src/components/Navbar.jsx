@@ -359,31 +359,34 @@ export default function Navbar() {
                     />
                     <div className="navbar__dd-info">
                       <span className="navbar__dd-name">{displayName ?? 'Kullanıcı'}</span>
-                      <Link
-                        to={`/profile/${user.id}`}
-                        className="navbar__dd-profile"
-                        onClick={() => setOpen(false)}
-                      >
-                        View profile
-                      </Link>
                     </div>
                   </div>
 
-                  {/* Email */}
-                  {maskedEmail && (
-                    <div className="navbar__dd-email">{maskedEmail}</div>
-                  )}
+                  <div className="navbar__dd-body">
+                    <Link
+                      to={`/profile/${user.id}`}
+                      className="navbar__dd-profile"
+                      onClick={() => setOpen(false)}
+                    >
+                      Profili Görüntüle
+                    </Link>
 
-                  <div className="navbar__dd-theme">
-                    <span className="navbar__dd-theme-label">Tema</span>
-                    <ThemeToggleBtn theme={theme} toggleTheme={toggleTheme} />
+                  {/* Email */}
+                    {maskedEmail && (
+                      <div className="navbar__dd-email">{maskedEmail}</div>
+                    )}
+
+                    <div className="navbar__dd-theme">
+                      <span className="navbar__dd-theme-label">Tema</span>
+                      <ThemeToggleBtn theme={theme} toggleTheme={toggleTheme} />
+                    </div>
                   </div>
 
                   <div className="navbar__dd-divider" />
 
                   {/* Sign out */}
                   <button className="navbar__dd-signout" onClick={handleLogout}>
-                    Sign out
+                    Çıkış Yap
                   </button>
                 </div>
               )}

@@ -417,14 +417,16 @@ body {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  min-width: 220px;
+  width: 210px;
+  max-width: min(74vw, 240px);
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-  padding: 8px 0;
+  padding: 10px 0 8px;
   z-index: 300;
   animation: dd-in 0.15s ease;
+  text-align: left;
 }
 
 @keyframes dd-in {
@@ -436,49 +438,63 @@ body {
 .navbar__dd-user {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px 8px;
+  gap: 12px;
+  padding: 8px 14px 10px;
 }
 
 .navbar__dd-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
   min-width: 0;
+  flex: 1;
 }
 
 .navbar__dd-name {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-h);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.navbar__dd-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 14px 10px;
+}
+
 .navbar__dd-profile {
-  font-size: 12px;
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--accent);
   text-decoration: none;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, color 0.15s;
+  padding: 4px 0;
 }
-.navbar__dd-profile:hover { opacity: 0.75; }
+.navbar__dd-profile:hover {
+  opacity: 0.85;
+}
 
 /* Email */
 .navbar__dd-email {
   font-size: 12px;
   color: var(--text-muted);
-  padding: 4px 14px 8px;
+  padding: 2px 0 6px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: left;
 }
 
 .navbar__dd-theme {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 14px 10px;
+  padding: 4px 0 0;
 }
 
 .navbar__dd-theme-label {
