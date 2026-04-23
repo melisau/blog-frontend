@@ -2,6 +2,53 @@ import { extractTags, toPlainExcerpt } from '../utils/blogText'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+function parseBlogDate(value) {
+  if (!value) return null
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
+  if (typeof value !== 'string') {
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+
+  const raw = value.trim()
+  if (!raw) return null
+
+  // Backend bazen UTC zamanı timezone suffix olmadan döndürüyor.
+  // Böyle durumda "3 saat önce" kayması olmaması için UTC kabul ediyoruz.
+  const hasExplicitTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(raw)
+  const normalized = raw.includes(' ') ? raw.replace(' ', 'T') : raw
+  const parsed = new Date(hasExplicitTimezone ? normalized : `${normalized}Z`)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function formatBlogDate(dateRaw) {
+  if (!dateRaw) return ''
+  const date = parseBlogDate(dateRaw)
+  if (!date) return ''
+
+  const now = new Date()
+  const isSameDay =
+    now.getFullYear() === date.getFullYear() &&
+    now.getMonth() === date.getMonth() &&
+    now.getDate() === date.getDate()
+
+  if (isSameDay) {
+    const diffMs = now.getTime() - date.getTime()
+    if (diffMs <= 0) return 'az önce'
+    const diffMinutes = Math.floor(diffMs / (1000 * 60))
+    if (diffMinutes < 1) return 'az önce'
+    if (diffMinutes < 60) return `${diffMinutes} dk önce`
+    const diffHours = Math.floor(diffMinutes / 60)
+    return `${diffHours} saat önce`
+  }
+
+  return date.toLocaleDateString('tr-TR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
 export function resolveImageUrl(url) {
   if (!url) return null
   if (url.startsWith('http://') || url.startsWith('https://')) return url
@@ -15,9 +62,7 @@ export function extractBlogList(data) {
 
 export function normalizeBlog(raw, excerptLength = 150) {
   const dateRaw = raw.created_at ?? raw.createdAt ?? raw.date ?? null
-  const date = dateRaw
-    ? new Date(dateRaw).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
-    : ''
+  const date = formatBlogDate(dateRaw)
 
   const rawExcerpt = raw.excerpt ?? raw.summary ?? raw.description ?? raw.content ?? raw.body ?? ''
   const excerpt = toPlainExcerpt(rawExcerpt, excerptLength)
