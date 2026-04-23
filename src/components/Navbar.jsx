@@ -79,23 +79,21 @@ export default function Navbar() {
   }, [location.search])
 
   useEffect(() => {
-    let cancelled = false
+    const controller = new AbortController()
     axiosInstance
-      .get('/categories')
+      .get('/categories', { signal: controller.signal })
       .then(({ data }) => {
-        if (cancelled) return
         const list = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.categories ?? [])
         const mapped = [...new Set(list
           .map((c) => (typeof c === 'string' ? c : (c.name ?? c.title ?? null)))
           .filter(Boolean)
         )].map((name) => ({ label: name, value: name }))
         setCategoryLinks([{ label: 'Tümü', value: null }, ...mapped])
-      })
-      .catch(() => {
-        if (cancelled) return
+      }).catch((err) => {
+        if (err?.name === 'CanceledError' || err?.name === 'AbortError') return
         setCategoryLinks([{ label: 'Tümü', value: null }])
       })
-    return () => { cancelled = true }
+    return () => controller.abort()
   }, [])
 
   useEffect(() => {
@@ -103,17 +101,16 @@ export default function Navbar() {
       setUnreadCount(0)
       return
     }
-    let cancelled = false
+    const controller = new AbortController()
     axiosInstance
-      .get('/notifications/unread-count')
+      .get('/notifications/unread-count', { signal: controller.signal })
       .then(({ data }) => {
-        if (cancelled) return
         setUnreadCount(Number(data?.unread_count ?? 0))
+      }).catch((err) => {
+        if (err?.name === 'CanceledError' || err?.name === 'AbortError') return
+        setUnreadCount(0)
       })
-      .catch(() => {
-        if (!cancelled) setUnreadCount(0)
-      })
-    return () => { cancelled = true }
+    return () => controller.abort()
   }, [isAuthenticated])
 
   function handleLogout() {

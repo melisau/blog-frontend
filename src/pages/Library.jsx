@@ -20,20 +20,25 @@ export default function Library() {
   const [error,   setError]   = useState('')
   const [removing, setRemoving] = useState(null)
 
-  const fetchFavorites = useCallback(async () => {
+  const fetchFavorites = useCallback(async (signal) => {
     setLoading(true)
     setError('')
     try {
-      const { data } = await axiosInstance.get('/users/me/favorites')
+      const { data } = await axiosInstance.get('/users/me/favorites', { signal })
       setBlogs(normalizeBlogs(extractBlogList(data)))
-    } catch {
+    } catch (err) {
+      if (err?.name === 'CanceledError' || err?.name === 'AbortError') return
       setError('Kütüphane yüklenemedi.')
     } finally {
       setLoading(false)
     }
   }, [])
 
-  useEffect(() => { fetchFavorites() }, [fetchFavorites])
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchFavorites(controller.signal)
+    return () => controller.abort()
+  }, [fetchFavorites])
 
   async function handleRemove(blogId) {
     setRemoving(blogId)

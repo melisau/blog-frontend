@@ -14,14 +14,15 @@ export function useCategories() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const fetchCategories = useCallback(async () => {
+  const fetchCategories = useCallback(async (signal) => {
     setLoading(true)
     setError('')
     try {
-      const { data } = await axiosInstance.get('/categories')
+      const { data } = await axiosInstance.get('/categories', { signal })
       const list = Array.isArray(data?.items) ? data.items : []
       setCategories(list.map(mapCategory))
-    } catch {
+    } catch (err) {
+      if (err?.name === 'CanceledError' || err?.name === 'AbortError') return
       setError('Kategoriler yüklenemedi. Lütfen tekrar deneyin.')
       setCategories([])
     } finally {
@@ -30,7 +31,9 @@ export function useCategories() {
   }, [])
 
   useEffect(() => {
-    fetchCategories()
+    const controller = new AbortController()
+    fetchCategories(controller.signal)
+    return () => controller.abort()
   }, [fetchCategories])
 
   return {

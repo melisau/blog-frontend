@@ -544,15 +544,7 @@ export default function Profile() {
                 </span>
                 <span className="profile-stat__label">Yazı</span>
               </div>
-              {profileUser.commentCount > 0 && (
-                <>
-                  <div className="profile-stat__divider" />
-                  <div className="profile-stat">
-                    <span className="profile-stat__value">{profileUser.commentCount}</span>
-                    <span className="profile-stat__label">Yorum</span>
-                  </div>
-                </>
-              )}
+
               <div className="profile-stat__divider" />
               <Link to={`/profile/${id}/following`} className="profile-stat profile-stat--link">
                 <span className="profile-stat__value">{statsLoading ? '…' : profileUser.followingCount}</span>

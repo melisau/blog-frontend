@@ -36,12 +36,14 @@ export default function Home() {
   })
 
   useEffect(() => {
-    let cancelled = false
+    const controller = new AbortController()
 
     async function fetchRecentTags() {
       try {
-        const { data } = await axiosInstance.get('/blogs', { params: { limit: 100 } })
-        if (cancelled) return
+        const { data } = await axiosInstance.get('/blogs', {
+          params: { limit: 100 },
+          signal: controller.signal,
+        })
         const list = extractBlogList(data)
         const counts = new Map()
         list.forEach((b) => {
@@ -54,13 +56,14 @@ export default function Home() {
           .slice(0, 10)
           .map(([tag]) => tag)
         setRecentTags(stableTags)
-      } catch {
-        if (!cancelled) setRecentTags([])
+      } catch (err) {
+        if (err?.name === 'CanceledError' || err?.name === 'AbortError') return
+        setRecentTags([])
       }
     }
 
     fetchRecentTags()
-    return () => { cancelled = true }
+    return () => controller.abort()
   }, [])
 
   useEffect(() => {
@@ -68,16 +71,18 @@ export default function Home() {
       setFavoriteIds(new Set())
       return
     }
-    let cancelled = false
+    const controller = new AbortController()
     axiosInstance
-      .get('/users/me/favorites')
+      .get('/users/me/favorites', { signal: controller.signal })
       .then(({ data }) => {
-        if (cancelled) return
         const list = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.data ?? [])
         setFavoriteIds(new Set(list.map((b) => String(b.id))))
       })
-      .catch(() => { /* silent fail */ })
-    return () => { cancelled = true }
+      .catch((err) => {
+        if (err?.name === 'CanceledError' || err?.name === 'AbortError') return
+        /* silent fail */
+      })
+    return () => controller.abort()
   }, [isAuthenticated])
 
   async function handleToggleFavorite(blogId) {
