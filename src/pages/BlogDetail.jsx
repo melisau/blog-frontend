@@ -7,6 +7,8 @@ import CommentItem from '../components/CommentItem'
 import CommentForm from '../components/CommentForm'
 import SEO from '../components/SEO'
 import HeartIcon from '../components/icons/HeartIcon'
+import { getMyFavorites, invalidateMyFavoritesCache } from '../services/favoritesService'
+import { getBlogById, getCommentsByBlogId, getUserSummaryById } from '../services/blogDetailService'
 
 // ── Normalisers ──────────────────────────────────────────────────────────────
 
@@ -98,15 +100,15 @@ export default function BlogDetail() {
   useEffect(() => {
     let cancelled = false
     setBlogLoading(true)
-    axiosInstance
-      .get(`/blogs/${id}`)
-      .then(async ({ data }) => {
+    getBlogById(id)
+      .then(async (data) => {
         if (cancelled) return
         const normalized = normalizeBlog(data)
         if (!normalized.author.username && normalized.author.id) {
           try {
-            const { data: u } = await axiosInstance.get(`/users/${normalized.author.id}`)
-            normalized.author.username = u.username ?? u.name ?? u.full_name ?? null
+            const u = await getUserSummaryById(normalized.author.id)
+            normalized.author.username = u.username
+            normalized.author.iconId = normalized.author.iconId ?? u.iconId
           } catch { /* silent fail */ }
         }
         setBlog(normalized)
@@ -125,11 +127,9 @@ export default function BlogDetail() {
   useEffect(() => {
     if (!isAuthenticated || !id) return
     let cancelled = false
-    axiosInstance
-      .get('/users/me/favorites')
-      .then(({ data }) => {
+    getMyFavorites()
+      .then((list) => {
         if (cancelled) return
-        const list = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.data ?? [])
         const saved = list.some((b) => String(b.id) === String(id))
         setIsFavorited(saved)
       })
@@ -149,6 +149,7 @@ export default function BlogDetail() {
       } else {
         await axiosInstance.post(`/users/me/favorites/${id}`)
       }
+      invalidateMyFavoritesCache()
     } catch {
       setIsFavorited(wasFavorited)
       setBlog((prev) => prev ? { ...prev, favoriteCount: Math.max(0, (prev.favoriteCount ?? 0) + (wasFavorited ? 1 : -1)) } : prev)
@@ -160,9 +161,8 @@ export default function BlogDetail() {
     let cancelled = false
     setCommentsLoading(true)
 
-    axiosInstance
-      .get(`/blogs/${id}/comments`)
-      .then(async ({ data }) => {
+    getCommentsByBlogId(id)
+      .then(async (data) => {
         if (cancelled) return
         const normalized = normalizeComments(data)
 
@@ -179,10 +179,10 @@ export default function BlogDetail() {
           const userMap = {}
           await Promise.allSettled(
             missingIds.map((uid) =>
-              axiosInstance.get(`/users/${uid}`).then(({ data: u }) => {
+              getUserSummaryById(uid).then((u) => {
                 userMap[uid] = {
-                  username: u.username ?? u.name ?? u.full_name ?? null,
-                  iconId:   u.icon_id ?? u.iconId ?? null,
+                  username: u.username,
+                  iconId: u.iconId,
                 }
               })
             )

@@ -8,6 +8,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import { extractTags } from '../utils/blogText'
 import { extractBlogList } from '../services/blogMapper'
 import { useInfiniteBlogs } from '../hooks/useInfiniteBlogs'
+import { getMyFavorites, invalidateMyFavoritesCache } from '../services/favoritesService'
 
 function normalizeTagValue(value) {
   return String(value ?? '').trim().toLocaleLowerCase('tr')
@@ -71,18 +72,16 @@ export default function Home() {
       setFavoriteIds(new Set())
       return
     }
-    const controller = new AbortController()
-    axiosInstance
-      .get('/users/me/favorites', { signal: controller.signal })
-      .then(({ data }) => {
-        const list = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.data ?? [])
+    let cancelled = false
+    getMyFavorites()
+      .then((list) => {
+        if (cancelled) return
         setFavoriteIds(new Set(list.map((b) => String(b.id))))
       })
-      .catch((err) => {
-        if (err?.name === 'CanceledError' || err?.name === 'AbortError') return
+      .catch(() => {
         /* silent fail */
       })
-    return () => controller.abort()
+    return () => { cancelled = true }
   }, [isAuthenticated])
 
   async function handleToggleFavorite(blogId) {
@@ -106,6 +105,7 @@ export default function Home() {
       } else {
         await axiosInstance.post(`/users/me/favorites/${blogId}`)
       }
+      invalidateMyFavoritesCache()
     } catch {
       setFavoriteIds((prev) => {
         const next = new Set(prev)

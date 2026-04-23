@@ -8,6 +8,7 @@ import BlogCardStats from '../components/BlogCardStats'
 import LoadingSpinner from '../components/LoadingSpinner'
 import AsyncState from '../components/AsyncState'
 import { extractBlogList, normalizeBlogs } from '../services/blogMapper'
+import { getMyFavorites, invalidateMyFavoritesCache } from '../services/favoritesService'
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -24,7 +25,8 @@ export default function Library() {
     setLoading(true)
     setError('')
     try {
-      const { data } = await axiosInstance.get('/users/me/favorites', { signal })
+      const data = await getMyFavorites()
+      if (signal?.aborted) return
       setBlogs(normalizeBlogs(extractBlogList(data)))
     } catch (err) {
       if (err?.name === 'CanceledError' || err?.name === 'AbortError') return
@@ -44,6 +46,7 @@ export default function Library() {
     setRemoving(blogId)
     try {
       await axiosInstance.delete(`/users/me/favorites/${blogId}`)
+      invalidateMyFavoritesCache()
       setBlogs((prev) => prev.filter((b) => b.id !== blogId))
     } catch { /* toast shown by interceptor */ }
     finally { setRemoving(null) }
