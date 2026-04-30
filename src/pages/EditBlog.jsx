@@ -12,7 +12,10 @@ import axiosInstance from '../api/axiosInstance'
 import RichTextEditor from '../components/RichTextEditor'
 import CoverImageField from '../components/CoverImageField'
 import { useCategories } from '../hooks/useCategories'
+import { resolveImageUrl } from '../services/blogMapper'
 
+const MAX_TAGS = 5
+const MAX_TAG_LENGTH = 24
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
 
 function validate(fields) {
@@ -30,6 +33,9 @@ export default function EditBlog() {
   const navigate = useNavigate()
 
   const [fields, setFields] = useState({ title: '', categoryId: '', content: '' })
+  const [tags, setTags]             = useState([])
+  const [tagInput, setTagInput]     = useState('')
+  const [tagError, setTagError]     = useState('')
   const [errors, setErrors] = useState({})
   const [serverError, setServerError] = useState('')
   const [loading,  setLoading]  = useState(false)
@@ -41,6 +47,8 @@ export default function EditBlog() {
   const [coverError, setCoverError] = useState('')
   const [coverRemoved, setCoverRemoved] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+
+  const tagInputRef  = useRef(null)
   const fileInputRef = useRef(null)
 
   function isObjectUrl(url) {
@@ -52,13 +60,14 @@ export default function EditBlog() {
     axiosInstance
       .get(`/blogs/${id}`)
       .then(({ data }) => {
-        const imageUrl = data.cover_image_url ?? ''
+        const rawImageUrl = data.cover_image_url ?? ''
         setFields({
           title: data.title ?? '',
           categoryId: data.category?.id ?? '',
           content: data.content ?? '',
         })
-        setCoverPreview(imageUrl || null)
+        setTags(data.tags ?? [])
+        setCoverPreview(rawImageUrl ? resolveImageUrl(rawImageUrl) : null)
         setCoverRemoved(false)
       })
       .catch(() => setServerError('Yazı yüklenemedi.'))
@@ -80,6 +89,8 @@ export default function EditBlog() {
     }
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }))
   }
+
+  // ── Cover image helpers ─────────────────────────────────────────────────────
 
   const applyFile = useCallback((file) => {
     if (!file) return
@@ -128,6 +139,35 @@ export default function EditBlog() {
     applyFile(e.dataTransfer.files?.[0])
   }
 
+  // ── Tag helpers ─────────────────────────────────────────────────────────────
+
+  function addTag(raw) {
+    const tag = raw.trim().replace(/,+$/, '')
+    if (!tag) return
+    if (tag.length < 2) { setTagError('Etiket en az 2 karakter olmalıdır.'); return }
+    if (tag.length > MAX_TAG_LENGTH) { setTagError(`Etiket en fazla ${MAX_TAG_LENGTH} karakter olabilir.`); return }
+    if (tags.includes(tag)) { setTagError('Bu etiket zaten eklenmiş.'); return }
+    if (tags.length >= MAX_TAGS) { setTagError(`En fazla ${MAX_TAGS} etiket eklenebilir.`); return }
+    setTags((prev) => [...prev, tag])
+    setTagInput('')
+    setTagError('')
+  }
+
+  function handleTagKeyDown(e) {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(tagInput) }
+    if (e.key === 'Backspace' && tagInput === '' && tags.length > 0) {
+      setTags((prev) => prev.slice(0, -1))
+      setTagError('')
+    }
+  }
+
+  function removeTag(index) {
+    setTags((prev) => prev.filter((_, i) => i !== index))
+    setTagError('')
+  }
+
+  // ── Submit ──────────────────────────────────────────────────────────────────
+
   async function handleSubmit(e) {
     e.preventDefault()
     const validationErrors = validate(fields)
@@ -143,6 +183,7 @@ export default function EditBlog() {
         fd.append('title', fields.title.trim())
         fd.append('category_id', fields.categoryId)
         fd.append('content', fields.content.trim())
+        fd.append('tags', JSON.stringify(tags))
         fd.append('cover_image', coverFile)
         await axiosInstance.put(`/blogs/${id}`, fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -152,6 +193,7 @@ export default function EditBlog() {
           title: fields.title.trim(),
           category_id: fields.categoryId,
           content: fields.content.trim(),
+          tags: tags,
           remove_cover_image: coverRemoved,
         })
       }
@@ -268,6 +310,57 @@ export default function EditBlog() {
             />
             <div className="field-hint">{fields.content.trim().length} karakter</div>
             {errors.content && <p className="field-error">{errors.content}</p>}
+          </div>
+
+          {/* ── Tags ───────────────────────────────────────────────── */}
+          <div className="field-group">
+            <label className="field-label">
+              Etiketler
+              <span className="field-label__optional"> (isteğe bağlı)</span>
+            </label>
+
+            <div
+              className={`tag-input-box${tagError ? ' field-input--error' : ''}`}
+              onClick={() => tagInputRef.current?.focus()}
+            >
+              {tags.map((tag, i) => (
+                <span key={i} className="tag-chip">
+                  #{tag}
+                  <button
+                    type="button"
+                    className="tag-chip__remove"
+                    onClick={(e) => { e.stopPropagation(); removeTag(i) }}
+                    aria-label={`${tag} etiketini kaldır`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {tags.length < MAX_TAGS && (
+                <input
+                  ref={tagInputRef}
+                  type="text"
+                  value={tagInput}
+                  onChange={(e) => {
+                    if (e.target.value.includes(',')) {
+                      addTag(e.target.value)
+                    } else {
+                      setTagInput(e.target.value)
+                      if (tagError) setTagError('')
+                    }
+                  }}
+                  onKeyDown={handleTagKeyDown}
+                  onBlur={() => { if (tagInput.trim()) addTag(tagInput) }}
+                  className="tag-input-field"
+                  placeholder={tags.length === 0 ? 'Etiket ekle, Enter veya , ile onayla' : ''}
+                />
+              )}
+            </div>
+
+            <div className="field-hint">
+              {tags.length}/{MAX_TAGS} etiket · Enter veya virgül ile ekleyin · Backspace ile silin
+            </div>
+            {tagError && <p className="field-error">{tagError}</p>}
           </div>
 
           <button type="submit" disabled={loading || categoriesLoading || Boolean(categoriesError)} className="auth-btn">

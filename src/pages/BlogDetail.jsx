@@ -10,16 +10,9 @@ import HeartIcon from '../components/icons/HeartIcon'
 import BookmarkIcon from '../components/icons/BookmarkIcon'
 import { getMyLibrary, getMyLikes, invalidateLibraryCache, invalidateLikesCache } from '../services/favoritesService'
 import { getBlogById, getCommentsByBlogId, getUserSummaryById } from '../services/blogDetailService'
+import { resolveImageUrl } from '../services/blogMapper'
 
 // ── Normalisers ──────────────────────────────────────────────────────────────
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
-function resolveImageUrl(url) {
-  if (!url) return null
-  if (url.startsWith('http://') || url.startsWith('https://')) return url
-  return `${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`
-}
 
 function extractTags(raw) {
   const source = raw.tags ?? raw.tag_list ?? raw.labels ?? raw.keywords ?? []
