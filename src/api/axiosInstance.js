@@ -11,6 +11,11 @@ const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
 });
 
+function isAuthEndpoint(url = '') {
+  const normalized = String(url).toLowerCase();
+  return normalized.includes('/auth/login') || normalized.includes('/auth/register');
+}
+
 // Request interceptor — attaches the JWT to every outgoing request.
 // Token is read from the Zustand store (getState() works outside React).
 // Do NOT use localStorage.getItem('token') here: the persist middleware
@@ -86,8 +91,13 @@ axiosInstance.interceptors.response.use(
     if (error.response) {
       const { status, data } = error.response;
       const message = extractMessage(data, status);
+      const requestUrl = error.config?.url || '';
 
       if (status === 401) {
+        if (isAuthEndpoint(requestUrl)) {
+          // Login/register failures are handled inline in their forms.
+          return Promise.reject(error);
+        }
         // Use the store's logout() so the persisted 'auth' key is properly
         // cleared — removeItem('token') would target the wrong localStorage key.
         useAuthStore.getState().logout();

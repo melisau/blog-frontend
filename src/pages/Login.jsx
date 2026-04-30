@@ -5,7 +5,7 @@
 // tried to visit (stored in location.state.from by PrivateRoute), or to /.
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import axiosInstance from '../api/axiosInstance';
+import axiosInstance, { extractMessage } from '../api/axiosInstance';
 import { useAuth } from '../context/AuthContext';
 
 // Simple regex — enough for client-side UX; the server performs real validation.
@@ -98,9 +98,13 @@ export default function Login() {
       login({ user: userObj, token });
       navigate(from, { replace: true });
     } catch (err) {
-      setServerError(
-        err.response?.data?.message || 'Giriş yapılamadı. Lütfen tekrar deneyin.'
-      );
+      if (err.response) {
+        setServerError(extractMessage(err.response.data, err.response.status));
+      } else if (err.request) {
+        setServerError('Sunucuya ulaşılamıyor. İnternet bağlantınızı kontrol edin.');
+      } else {
+        setServerError('Giriş yapılamadı. Lütfen tekrar deneyin.');
+      }
     } finally {
       setLoading(false);
     }
