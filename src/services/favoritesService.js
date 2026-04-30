@@ -2,40 +2,78 @@ import axiosInstance from '../api/axiosInstance'
 
 const CACHE_TTL_MS = 15_000
 
-let favoritesCache = null
-let cacheTimestamp = 0
-let inFlightFavoritesPromise = null
+let libraryCache = null
+let libraryCacheTimestamp = 0
+let inFlightLibraryPromise = null
 
-function normalizeFavoritesResponse(data) {
+let likesCache = null
+let likesCacheTimestamp = 0
+let inFlightLikesPromise = null
+
+function normalizeResponse(data) {
   return Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.data ?? [])
 }
 
-export async function getMyFavorites({ force = false } = {}) {
+export async function getMyLibrary({ force = false } = {}) {
   const now = Date.now()
   const hasFreshCache =
     !force &&
-    Array.isArray(favoritesCache) &&
-    now - cacheTimestamp < CACHE_TTL_MS
+    Array.isArray(libraryCache) &&
+    now - libraryCacheTimestamp < CACHE_TTL_MS
 
-  if (hasFreshCache) return favoritesCache
-  if (inFlightFavoritesPromise) return inFlightFavoritesPromise
+  if (hasFreshCache) return libraryCache
+  if (inFlightLibraryPromise) return inFlightLibraryPromise
 
-  inFlightFavoritesPromise = axiosInstance
-    .get('/users/me/favorites')
+  inFlightLibraryPromise = axiosInstance
+    .get('/users/me/library')
     .then(({ data }) => {
-      const normalized = normalizeFavoritesResponse(data)
-      favoritesCache = normalized
-      cacheTimestamp = Date.now()
+      const normalized = normalizeResponse(data)
+      libraryCache = normalized
+      libraryCacheTimestamp = Date.now()
       return normalized
     })
     .finally(() => {
-      inFlightFavoritesPromise = null
+      inFlightLibraryPromise = null
     })
 
-  return inFlightFavoritesPromise
+  return inFlightLibraryPromise
 }
 
-export function invalidateMyFavoritesCache() {
-  favoritesCache = null
-  cacheTimestamp = 0
+export async function getMyLikes({ force = false } = {}) {
+  const now = Date.now()
+  const hasFreshCache =
+    !force &&
+    Array.isArray(likesCache) &&
+    now - likesCacheTimestamp < CACHE_TTL_MS
+
+  if (hasFreshCache) return likesCache
+  if (inFlightLikesPromise) return inFlightLikesPromise
+
+  inFlightLikesPromise = axiosInstance
+    .get('/users/me/likes')
+    .then(({ data }) => {
+      const normalized = normalizeResponse(data)
+      likesCache = normalized
+      likesCacheTimestamp = Date.now()
+      return normalized
+    })
+    .finally(() => {
+      inFlightLikesPromise = null
+    })
+
+  return inFlightLikesPromise
 }
+
+export function invalidateLibraryCache() {
+  libraryCache = null
+  libraryCacheTimestamp = 0
+}
+
+export function invalidateLikesCache() {
+  likesCache = null
+  likesCacheTimestamp = 0
+}
+
+// Backward compatibility aliases
+export const getMyFavorites = getMyLibrary
+export const invalidateMyFavoritesCache = invalidateLibraryCache

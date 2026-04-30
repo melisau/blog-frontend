@@ -8,7 +8,8 @@ import BlogCardStats from '../components/BlogCardStats'
 import LoadingSpinner from '../components/LoadingSpinner'
 import AsyncState from '../components/AsyncState'
 import { extractBlogList, normalizeBlogs } from '../services/blogMapper'
-import { getMyFavorites, invalidateMyFavoritesCache } from '../services/favoritesService'
+import { getMyLibrary, invalidateLibraryCache } from '../services/favoritesService'
+import BookmarkIcon from '../components/icons/BookmarkIcon'
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -21,11 +22,11 @@ export default function Library() {
   const [error,   setError]   = useState('')
   const [removing, setRemoving] = useState(null)
 
-  const fetchFavorites = useCallback(async (signal) => {
+  const fetchLibrary = useCallback(async (signal) => {
     setLoading(true)
     setError('')
     try {
-      const data = await getMyFavorites()
+      const data = await getMyLibrary()
       if (signal?.aborted) return
       setBlogs(normalizeBlogs(extractBlogList(data)))
     } catch (err) {
@@ -38,15 +39,15 @@ export default function Library() {
 
   useEffect(() => {
     const controller = new AbortController()
-    fetchFavorites(controller.signal)
+    fetchLibrary(controller.signal)
     return () => controller.abort()
-  }, [fetchFavorites])
+  }, [fetchLibrary])
 
   async function handleRemove(blogId) {
     setRemoving(blogId)
     try {
-      await axiosInstance.delete(`/users/me/favorites/${blogId}`)
-      invalidateMyFavoritesCache()
+      await axiosInstance.delete(`/users/me/library/${blogId}`)
+      invalidateLibraryCache()
       setBlogs((prev) => prev.filter((b) => b.id !== blogId))
     } catch { /* toast shown by interceptor */ }
     finally { setRemoving(null) }
@@ -97,19 +98,19 @@ export default function Library() {
               onKeyDown={(e) => e.key === 'Enter' && navigate(`/blogs/${blog.id}`)}
             >
               <button
-                className="blog-card__favorite blog-card__favorite--active"
+                className="blog-card__save blog-card__save--active"
                 onClick={(e) => {
                   e.stopPropagation()
                   handleRemove(blog.id)
                 }}
                 disabled={removing === blog.id}
-                title="Favorilerden çıkar"
-                aria-label="Favorilerden çıkar"
+                title="Kitaplıktan çıkar"
+                aria-label="Kitaplıktan çıkar"
               >
                 {removing === blog.id ? (
                   '…'
                 ) : (
-                  <HeartIcon size={16} filled />
+                  <BookmarkIcon size={16} filled />
                 )}
               </button>
               {blog.imageUrl && (
@@ -135,7 +136,7 @@ export default function Library() {
                 </div>
 
                 <div className="blog-card__footer">
-                  <BlogCardStats favoriteCount={blog.favoriteCount ?? 0} commentCount={blog.commentCount ?? 0} />
+                  <BlogCardStats likeCount={blog.likeCount ?? 0} commentCount={blog.commentCount ?? 0} />
                   <span className="blog-card__date">{blog.date}</span>
                 </div>
 

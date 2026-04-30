@@ -868,7 +868,7 @@ body {
 }
 /* ── end Library ─────────────────────────────────────────── */
 
-/* ── Blog detail topbar (back-link + favorite) ───────────── */
+/* ── Blog detail topbar (back-link + save/like) ───────────── */
 .detail-topbar {
   display: flex;
   align-items: center;
@@ -881,7 +881,14 @@ body {
   margin-bottom: 0;
 }
 
-.favorite-btn {
+.detail-topbar__actions {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.save-btn,
+.like-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -894,19 +901,29 @@ body {
   color: var(--text-muted);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
-  margin-left: auto;
 }
-.favorite-btn:hover {
+
+.save-btn:hover,
+.like-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-bg);
 }
-.favorite-btn--active {
+
+.save-btn--active {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.like-btn--active {
   color: #ef4444;
   border-color: rgba(239, 68, 68, 0.35);
   background: rgba(239, 68, 68, 0.1);
 }
-.favorite-btn:disabled {
+
+.save-btn:disabled,
+.like-btn:disabled {
   opacity: 0.6;
   cursor: default;
 }
@@ -1466,9 +1483,9 @@ p {
   padding: 16px;
 }
 
-.blog-card__favorite {
+.blog-card__save,
+.blog-card__like {
   position: absolute;
-  top: 12px;
   right: 12px;
   z-index: 2;
   width: 34px;
@@ -1484,20 +1501,36 @@ p {
   transition: border-color 0.15s, color 0.15s, background 0.15s, transform 0.15s;
 }
 
-.blog-card__favorite:hover {
+.blog-card__save {
+  top: 12px;
+}
+
+.blog-card__like {
+  top: 54px;
+}
+
+.blog-card__save:hover,
+.blog-card__like:hover {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-bg);
   transform: scale(1.04);
 }
 
-.blog-card__favorite--active {
+.blog-card__save--active {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.blog-card__like--active {
   color: #ef4444;
   border-color: rgba(239, 68, 68, 0.35);
   background: rgba(239, 68, 68, 0.1);
 }
 
-.blog-card__favorite:disabled {
+.blog-card__save:disabled,
+.blog-card__like:disabled {
   opacity: 0.55;
   cursor: default;
   transform: none;

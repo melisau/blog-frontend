@@ -67,7 +67,8 @@ describe('Home', () => {
     const secondBatch = makeBlogs(2, 7)
 
     axiosInstance.get.mockImplementation((url, config = {}) => {
-      if (url === '/users/me/favorites') return Promise.resolve({ data: [] })
+      if (url === '/users/me/library') return Promise.resolve({ data: [] })
+      if (url === '/users/me/likes') return Promise.resolve({ data: [] })
       if (url === '/blogs' && config?.params?.limit === 100) return Promise.resolve({ data: [] })
       if (url === '/blogs' && config?.params?.skip === 0) return Promise.resolve({ data: { items: firstBatch } })
       if (url === '/blogs' && config?.params?.skip === 6) return Promise.resolve({ data: { items: secondBatch } })
@@ -87,20 +88,21 @@ describe('Home', () => {
     }))
   })
 
-  it('favori butonu tiklandiginda endpointi cagirir', async () => {
+  it('kitapliga ekle butonu tiklandiginda endpointi cagirir', async () => {
     axiosInstance.get.mockImplementation((url, config = {}) => {
-      if (url === '/users/me/favorites') return Promise.resolve({ data: [] })
+      if (url === '/users/me/library') return Promise.resolve({ data: [] })
+      if (url === '/users/me/likes') return Promise.resolve({ data: [] })
       if (url === '/blogs' && config?.params?.limit === 100) return Promise.resolve({ data: [] })
       if (url === '/blogs' && config?.params?.skip === 0) return Promise.resolve({ data: { items: makeBlogs(1, 1) } })
       return Promise.resolve({ data: { items: [] } })
     })
 
     renderHome()
-    const favoriteButtons = await screen.findAllByRole('button', { name: 'Favorilere ekle' })
-    await userEvent.click(favoriteButtons[0])
+    const saveButtons = await screen.findAllByRole('button', { name: 'Kitaplığa ekle' })
+    await userEvent.click(saveButtons[0])
 
     await waitFor(() => {
-      expect(axiosInstance.post).toHaveBeenCalledWith('/users/me/favorites/1')
+      expect(axiosInstance.post).toHaveBeenCalledWith('/users/me/library/1')
     })
   })
 })

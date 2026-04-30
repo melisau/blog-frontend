@@ -623,7 +623,7 @@ export default function Profile() {
                     )}
                   </div>
                   <div className="blog-card__footer">
-                    <BlogCardStats favoriteCount={blog.favoriteCount ?? 0} commentCount={blog.commentCount ?? 0} />
+                    <BlogCardStats likeCount={blog.likeCount ?? 0} commentCount={blog.commentCount ?? 0} />
                     <span className="blog-card__date">{blog.date}</span>
                   </div>
                   <span className="blog-card__read">Devamını Oku →</span>

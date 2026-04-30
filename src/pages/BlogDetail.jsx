@@ -7,7 +7,8 @@ import CommentItem from '../components/CommentItem'
 import CommentForm from '../components/CommentForm'
 import SEO from '../components/SEO'
 import HeartIcon from '../components/icons/HeartIcon'
-import { getMyFavorites, invalidateMyFavoritesCache } from '../services/favoritesService'
+import BookmarkIcon from '../components/icons/BookmarkIcon'
+import { getMyLibrary, getMyLikes, invalidateLibraryCache, invalidateLikesCache } from '../services/favoritesService'
 import { getBlogById, getCommentsByBlogId, getUserSummaryById } from '../services/blogDetailService'
 
 // ── Normalisers ──────────────────────────────────────────────────────────────
@@ -43,7 +44,8 @@ function normalizeBlog(raw) {
     date:     dateRaw ? new Date(dateRaw).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) : '',
     author:   { id: authorId, username, iconId: authorIconId },
     imageUrl: resolveImageUrl(raw.cover_image_url ?? raw.image_url ?? raw.imageUrl ?? null),
-    favoriteCount: raw.favorite_count ?? raw.favorites_count ?? raw.like_count ?? raw.likes_count ?? 0,
+    saveCount: raw.save_count ?? raw.saves_count ?? 0,
+    likeCount: raw.like_count ?? raw.likes_count ?? raw.favorite_count ?? raw.favorites_count ?? 0,
   }
 }
 
@@ -94,8 +96,10 @@ export default function BlogDetail() {
   const [deletingCommentId, setDeletingCommentId] = useState(null)
   const [deletingBlog,      setDeletingBlog]      = useState(false)
 
-  const [isFavorited,     setIsFavorited]     = useState(false)
-  const [favoriteLoading, setFavoriteLoading] = useState(false)
+  const [isSaved,      setIsSaved]      = useState(false)
+  const [saveLoading,  setSaveLoading]  = useState(false)
+  const [isLiked,      setIsLiked]      = useState(false)
+  const [likeLoading,  setLikeLoading]  = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -123,38 +127,58 @@ export default function BlogDetail() {
     return () => { cancelled = true; document.title = 'Blog | En Son Yazılar' }
   }, [id])
 
-  // Check if this blog is already saved to the user's library
+  // Check engagement states
   useEffect(() => {
     if (!isAuthenticated || !id) return
     let cancelled = false
-    getMyFavorites()
-      .then((list) => {
-        if (cancelled) return
-        const saved = list.some((b) => String(b.id) === String(id))
-        setIsFavorited(saved)
-      })
-      .catch(() => { /* silent */ })
+
+    getMyLibrary().then((list) => {
+      if (cancelled) return
+      setIsSaved(list.some((b) => String(b.id) === String(id)))
+    }).catch(() => {})
+
+    getMyLikes().then((list) => {
+      if (cancelled) return
+      setIsLiked(list.some((b) => String(b.id) === String(id)))
+    }).catch(() => {})
+
     return () => { cancelled = true }
   }, [id, isAuthenticated])
 
-  async function handleToggleFavorite() {
-    if (favoriteLoading) return
-    const wasFavorited = isFavorited
-    setFavoriteLoading(true)
-    setIsFavorited(!wasFavorited)
-    setBlog((prev) => prev ? { ...prev, favoriteCount: Math.max(0, (prev.favoriteCount ?? 0) + (wasFavorited ? -1 : 1)) } : prev)
+  async function handleToggleSave() {
+    if (saveLoading) return
+    const wasSaved = isSaved
+    setSaveLoading(true)
+    setIsSaved(!wasSaved)
+    setBlog((prev) => prev ? { ...prev, saveCount: Math.max(0, (prev.saveCount ?? 0) + (wasSaved ? -1 : 1)) } : prev)
     try {
-      if (wasFavorited) {
-        await axiosInstance.delete(`/users/me/favorites/${id}`)
+      if (wasSaved) {
+        await axiosInstance.delete(`/users/me/library/${id}`)
       } else {
-        await axiosInstance.post(`/users/me/favorites/${id}`)
+        await axiosInstance.post(`/users/me/library/${id}`)
       }
-      invalidateMyFavoritesCache()
+      invalidateLibraryCache()
     } catch {
-      setIsFavorited(wasFavorited)
-      setBlog((prev) => prev ? { ...prev, favoriteCount: Math.max(0, (prev.favoriteCount ?? 0) + (wasFavorited ? 1 : -1)) } : prev)
+      setIsSaved(wasSaved)
+      setBlog((prev) => prev ? { ...prev, saveCount: Math.max(0, (prev.saveCount ?? 0) + (wasSaved ? 1 : -1)) } : prev)
     }
-    finally { setFavoriteLoading(false) }
+    finally { setSaveLoading(false) }
+  }
+
+  async function handleToggleLike() {
+    if (likeLoading) return
+    const wasLiked = isLiked
+    setLikeLoading(true)
+    setIsLiked(!wasLiked)
+    setBlog((prev) => prev ? { ...prev, likeCount: Math.max(0, (prev.likeCount ?? 0) + (wasLiked ? -1 : 1)) } : prev)
+    try {
+      await axiosInstance.post(`/users/me/likes/${id}`)
+      invalidateLikesCache()
+    } catch {
+      setIsLiked(wasLiked)
+      setBlog((prev) => prev ? { ...prev, likeCount: Math.max(0, (prev.likeCount ?? 0) + (wasLiked ? 1 : -1)) } : prev)
+    }
+    finally { setLikeLoading(false) }
   }
 
   useEffect(() => {
@@ -288,15 +312,26 @@ export default function BlogDetail() {
       <div className="detail-topbar">
         <Link to="/" className="back-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg></Link>
         {isAuthenticated && (
-          <button
-            className={`favorite-btn${isFavorited ? ' favorite-btn--active' : ''}`}
-            onClick={handleToggleFavorite}
-            disabled={favoriteLoading}
-            title={isFavorited ? 'Favorilerden çıkar' : 'Favorilere ekle'}
-            aria-label={isFavorited ? 'Favorilerden çıkar' : 'Favorilere ekle'}
-          >
-            <HeartIcon size={18} filled={isFavorited} />
-          </button>
+          <div className="detail-topbar__actions">
+            <button
+              className={`save-btn${isSaved ? ' save-btn--active' : ''}`}
+              onClick={handleToggleSave}
+              disabled={saveLoading}
+              title={isSaved ? 'Kitaplıktan çıkar' : 'Kitaplığa ekle'}
+              aria-label={isSaved ? 'Kitaplıktan çıkar' : 'Kitaplığa ekle'}
+            >
+              <BookmarkIcon size={20} filled={isSaved} />
+            </button>
+            <button
+              className={`like-btn${isLiked ? ' like-btn--active' : ''}`}
+              onClick={handleToggleLike}
+              disabled={likeLoading}
+              title={isLiked ? 'Beğenmekten vazgeç' : 'Beğen'}
+              aria-label={isLiked ? 'Beğenmekten vazgeç' : 'Beğen'}
+            >
+              <HeartIcon size={20} filled={isLiked} />
+            </button>
+          </div>
         )}
       </div>
 

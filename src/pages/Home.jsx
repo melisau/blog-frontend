@@ -8,7 +8,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import { extractTags } from '../utils/blogText'
 import { extractBlogList } from '../services/blogMapper'
 import { useInfiniteBlogs } from '../hooks/useInfiniteBlogs'
-import { getMyFavorites, invalidateMyFavoritesCache } from '../services/favoritesService'
+import { getMyLibrary, getMyLikes, invalidateLibraryCache, invalidateLikesCache } from '../services/favoritesService'
 
 function normalizeTagValue(value) {
   return String(value ?? '').trim().toLocaleLowerCase('tr')
@@ -27,8 +27,11 @@ export default function Home() {
   const query          = searchParams.get('q')?.trim() ?? ''
 
   const [recentTags, setRecentTags] = useState([])
-  const [favoriteIds, setFavoriteIds] = useState(new Set())
-  const [favoriteLoadingId, setFavoriteLoadingId] = useState(null)
+  const [savedIds, setSavedIds] = useState(new Set())
+  const [saveLoadingId, setSaveLoadingId] = useState(null)
+  const [likedIds, setLikedIds] = useState(new Set())
+  const [likeLoadingId, setLikeLoadingId] = useState(null)
+
   const { blogs, loading, loadingMore, error, hasMore, loadMoreRef, updateBlogById } = useInfiniteBlogs({
     batchSize: BATCH_SIZE,
     category: activeCategory,
@@ -69,56 +72,97 @@ export default function Home() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      setFavoriteIds(new Set())
+      setSavedIds(new Set())
+      setLikedIds(new Set())
       return
     }
     let cancelled = false
-    getMyFavorites()
+    
+    // Fetch Library
+    getMyLibrary()
       .then((list) => {
-        if (cancelled) return
-        setFavoriteIds(new Set(list.map((b) => String(b.id))))
+        if (!cancelled) setSavedIds(new Set(list.map((b) => String(b.id))))
       })
-      .catch(() => {
-        /* silent fail */
+      .catch(() => {})
+
+    // Fetch Likes
+    getMyLikes()
+      .then((list) => {
+        if (!cancelled) setLikedIds(new Set(list.map((b) => String(b.id))))
       })
+      .catch(() => {})
+
     return () => { cancelled = true }
   }, [isAuthenticated])
 
-  async function handleToggleFavorite(blogId) {
-    if (!isAuthenticated || favoriteLoadingId) return
+  async function handleToggleSave(blogId) {
+    if (!isAuthenticated || saveLoadingId) return
     const key = String(blogId)
-    const currentlyFavorited = favoriteIds.has(key)
-    setFavoriteLoadingId(blogId)
-    setFavoriteIds((prev) => {
+    const currentlySaved = savedIds.has(key)
+    setSaveLoadingId(blogId)
+    setSavedIds((prev) => {
       const next = new Set(prev)
-      if (currentlyFavorited) next.delete(key)
+      if (currentlySaved) next.delete(key)
       else next.add(key)
       return next
     })
     updateBlogById(blogId, (blog) => ({
       ...blog,
-      favoriteCount: Math.max(0, (blog.favoriteCount ?? 0) + (currentlyFavorited ? -1 : 1)),
+      saveCount: Math.max(0, (blog.saveCount ?? 0) + (currentlySaved ? -1 : 1)),
     }))
     try {
-      if (currentlyFavorited) {
-        await axiosInstance.delete(`/users/me/favorites/${blogId}`)
+      if (currentlySaved) {
+        await axiosInstance.delete(`/users/me/library/${blogId}`)
       } else {
-        await axiosInstance.post(`/users/me/favorites/${blogId}`)
+        await axiosInstance.post(`/users/me/library/${blogId}`)
       }
-      invalidateMyFavoritesCache()
+      invalidateLibraryCache()
     } catch {
-      setFavoriteIds((prev) => {
+      setSavedIds((prev) => {
         const next = new Set(prev)
-        if (currentlyFavorited) next.add(key)
+        if (currentlySaved) next.add(key)
         else next.delete(key)
         return next
       })
       updateBlogById(blogId, (blog) => ({
         ...blog,
-        favoriteCount: Math.max(0, (blog.favoriteCount ?? 0) + (currentlyFavorited ? 1 : -1)),
+        saveCount: Math.max(0, (blog.saveCount ?? 0) + (currentlySaved ? 1 : -1)),
       }))
     }
-    finally { setFavoriteLoadingId(null) }
+    finally { setSaveLoadingId(null) }
+  }
+
+  async function handleToggleLike(blogId) {
+    if (!isAuthenticated || likeLoadingId) return
+    const key = String(blogId)
+    const currentlyLiked = likedIds.has(key)
+    setLikeLoadingId(blogId)
+    setLikedIds((prev) => {
+      const next = new Set(prev)
+      if (currentlyLiked) next.delete(key)
+      else next.add(key)
+      return next
+    })
+    updateBlogById(blogId, (blog) => ({
+      ...blog,
+      likeCount: Math.max(0, (blog.likeCount ?? 0) + (currentlyLiked ? -1 : 1)),
+    }))
+    try {
+      await axiosInstance.post(`/users/me/likes/${blogId}`)
+      invalidateLikesCache()
+    } catch {
+      setLikedIds((prev) => {
+        const next = new Set(prev)
+        if (currentlyLiked) next.add(key)
+        else next.delete(key)
+        return next
+      })
+      updateBlogById(blogId, (blog) => ({
+        ...blog,
+        likeCount: Math.max(0, (blog.likeCount ?? 0) + (currentlyLiked ? 1 : -1)),
+      }))
+    }
+    finally { setLikeLoadingId(null) }
   }
 
   const uniqueRecentTags = [...new Set(recentTags.map((tag) => String(tag).trim()).filter(Boolean))]
@@ -182,9 +226,12 @@ export default function Home() {
                     key={blog.id}
                     blog={blog}
                     isAuthenticated={isAuthenticated}
-                    isFavorited={favoriteIds.has(String(blog.id))}
-                    favoriteLoading={favoriteLoadingId === blog.id}
-                    onToggleFavorite={handleToggleFavorite}
+                    isSaved={savedIds.has(String(blog.id))}
+                    saveLoading={saveLoadingId === blog.id}
+                    onToggleSave={handleToggleSave}
+                    isLiked={likedIds.has(String(blog.id))}
+                    likeLoading={likeLoadingId === blog.id}
+                    onToggleLike={handleToggleLike}
                     getTagHref={getTagHref}
                   />
                 ))}

@@ -237,10 +237,10 @@ export default function BlogContent({
         <span
           className="blog-card__stat blog-article__likes"
           title="Beğeni sayısı"
-          aria-label={`Beğeni sayısı ${blog.favoriteCount ?? 0}`}
+          aria-label={`Beğeni sayısı ${blog.likeCount ?? 0}`}
         >
           <HeartIcon size={18} />
-          <span>{blog.favoriteCount ?? 0}</span>
+          <span>{blog.likeCount ?? 0}</span>
         </span>
         <div className="blog-card__tags">
           {blog.category && (

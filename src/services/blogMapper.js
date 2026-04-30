@@ -80,7 +80,8 @@ export function normalizeBlog(raw, excerptLength = 150) {
     authorId: raw.author?.id ?? raw.author_id ?? raw.user?.id ?? raw.user_id ?? raw.created_by?.id ?? raw.created_by ?? null,
     author: embeddedName ? { username: embeddedName, iconId: embeddedIconId } : null,
     imageUrl: resolveImageUrl(raw.cover_image_url ?? raw.image_url ?? raw.imageUrl ?? null),
-    favoriteCount: raw.favorite_count ?? raw.favorites_count ?? raw.like_count ?? raw.likes_count ?? 0,
+    saveCount: raw.save_count ?? raw.saves_count ?? 0,
+    likeCount: raw.like_count ?? raw.likes_count ?? raw.favorite_count ?? raw.favorites_count ?? 0,
     commentCount: raw.comment_count ?? raw.comments_count ?? 0,
   }
 }

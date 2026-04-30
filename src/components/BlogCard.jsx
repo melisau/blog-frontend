@@ -1,14 +1,18 @@
 import { Link, useNavigate } from 'react-router-dom'
 import Avatar from './Avatar'
 import HeartIcon from './icons/HeartIcon'
+import BookmarkIcon from './icons/BookmarkIcon'
 import BlogCardStats from './BlogCardStats'
 
 export default function BlogCard({
   blog,
   isAuthenticated = false,
-  isFavorited = false,
-  favoriteLoading = false,
-  onToggleFavorite,
+  isSaved = false,
+  saveLoading = false,
+  onToggleSave,
+  isLiked = false,
+  likeLoading = false,
+  onToggleLike,
   getTagHref,
 }) {
   const navigate = useNavigate()
@@ -22,19 +26,34 @@ export default function BlogCard({
       onKeyDown={(e) => e.key === 'Enter' && navigate(`/blogs/${blog.id}`)}
     >
       {isAuthenticated && (
-        <button
-          type="button"
-          className={`blog-card__favorite${isFavorited ? ' blog-card__favorite--active' : ''}`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onToggleFavorite?.(blog.id)
-          }}
-          disabled={favoriteLoading}
-          title={isFavorited ? 'Favorilerden çıkar' : 'Favorilere ekle'}
-          aria-label={isFavorited ? 'Favorilerden çıkar' : 'Favorilere ekle'}
-        >
-          <HeartIcon size={16} filled={isFavorited} />
-        </button>
+        <>
+          <button
+            type="button"
+            className={`blog-card__save${isSaved ? ' blog-card__save--active' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleSave?.(blog.id)
+            }}
+            disabled={saveLoading}
+            title={isSaved ? 'Kitaplıktan çıkar' : 'Kitaplığa ekle'}
+            aria-label={isSaved ? 'Kitaplıktan çıkar' : 'Kitaplığa ekle'}
+          >
+            <BookmarkIcon size={16} filled={isSaved} />
+          </button>
+          <button
+            type="button"
+            className={`blog-card__like${isLiked ? ' blog-card__like--active' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleLike?.(blog.id)
+            }}
+            disabled={likeLoading}
+            title={isLiked ? 'Beğenmekten vazgeç' : 'Beğen'}
+            aria-label={isLiked ? 'Beğenmekten vazgeç' : 'Beğen'}
+          >
+            <HeartIcon size={16} filled={isLiked} />
+          </button>
+        </>
       )}
 
       {blog.imageUrl && (
@@ -91,7 +110,7 @@ export default function BlogCard({
         </div>
 
         <div className="blog-card__footer">
-          <BlogCardStats favoriteCount={blog.favoriteCount ?? 0} commentCount={blog.commentCount ?? 0} />
+          <BlogCardStats likeCount={blog.likeCount ?? 0} commentCount={blog.commentCount ?? 0} />
           <span className="blog-card__date">{blog.date}</span>
         </div>
         <span className="blog-card__read">Devamını Oku →</span>
