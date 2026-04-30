@@ -1501,12 +1501,12 @@ p {
   transition: border-color 0.15s, color 0.15s, background 0.15s, transform 0.15s;
 }
 
-.blog-card__save {
+.blog-card__like {
   top: 12px;
 }
 
-.blog-card__like {
-  top: 54px;
+.blog-card__save {
+  bottom: 12px;
 }
 
 .blog-card__save:hover,
