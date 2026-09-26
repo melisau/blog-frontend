@@ -39,7 +39,7 @@ export default function Following() {
 
   return (
     <div className="page-container page-container--narrow">
-      <SEO title="Takip Edilenler" description="Takip ettiğin kullanıcılar." />
+      <SEO title="Takip Edilenler" description="Takip ettiğin kullanıcılar." noindex />
 
       <h1 className="library-title">Takip Edilenler</h1>
 

@@ -4,6 +4,7 @@ import axiosInstance from '../api/axiosInstance'
 import RichTextEditor from '../components/RichTextEditor'
 import CoverImageField from '../components/CoverImageField'
 import { useCategories } from '../hooks/useCategories'
+import SEO from '../components/SEO'
 
 const MAX_TAGS = 5
 const MAX_TAG_LENGTH = 24
@@ -171,6 +172,7 @@ export default function NewBlog() {
 
   return (
     <div className="page-container page-container--narrow">
+      <SEO title="Yeni Yazı" description="Fitbook topluluğuyla paylaşmak için yeni bir yazı oluşturun." noindex />
       <Link to="/" className="back-link">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="15 18 9 12 15 6"/>

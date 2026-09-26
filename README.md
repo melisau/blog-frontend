@@ -50,7 +50,7 @@ Modern, tek sayfa (SPA) bir **blog platformu** için React tabanlı frontend uyg
 - **Takip sistemi:** Yazar takibi + `/following` akışı + takipçi/takip edilen listeleri.
 - **Yorumlar:** Blog detay sayfasında yorum ekleme/listeleme.
 - **Bildirimler:** Navbar içinde okunmamış bildirim sayacı ve işaretleme.
-- **SEO:** `react-helmet-async` ile sayfa başına dinamik `<title>`/meta.
+- **SEO:** Sayfaya özel başlık, açıklama, canonical, Open Graph/Twitter etiketleri, BlogPosting/WebSite/ProfilePage JSON-LD, robots kuralları, hakkımızda sayfası ve API'deki yazılardan üretilen sitemap.
 - **Tema:** Açık/koyu tema. `index.html` içine gömülü inline script, sayfa ilk yüklenirken **flash'ı** önler.
 - **Toast bildirimleri:** Global `ToastContainer` tüm route geçişlerinde ayakta kalır; Axios hata interceptor'ı otomatik toast atar.
 - **Merkezi hata yönetimi:** `axiosInstance` içinde FastAPI tarzı `{ detail: [...] }` dahil 4 farklı hata formatını okuyan `extractMessage` yardımcısı; `401` alındığında otomatik `logout()` + `/login` yönlendirmesi.
@@ -87,6 +87,11 @@ Vite `http://localhost:5173` adresinde açılır (terminal çıktısına bakın)
 npm run build      # dist/ klasörüne üretir
 npm run preview    # build'i yerelde servis eder
 ```
+
+Üretim derlemesi, `VITE_API_URL` üzerinden erişilebilen yazı ve kategorileri
+`/sitemap.xml` içine ekler. Site adresini `VITE_SITE_URL` ile verin; bu değer
+robots.txt içindeki sitemap adresiyle aynı alan adını göstermelidir. API build
+sırasında erişilemiyorsa sitemap ana sayfa ve Hakkında sayfasıyla oluşturulur.
 
 ---
 

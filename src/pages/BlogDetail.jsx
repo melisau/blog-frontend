@@ -35,11 +35,50 @@ function normalizeBlog(raw) {
     category: typeof raw.category === 'string' ? raw.category : (raw.category?.name ?? null),
     tags:     extractTags(raw),
     date:     dateRaw ? new Date(dateRaw).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) : '',
+    publishedAt: dateRaw,
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? dateRaw,
     author:   { id: authorId, username, iconId: authorIconId },
     imageUrl: resolveImageUrl(raw.cover_image_url ?? raw.image_url ?? raw.imageUrl ?? null),
     saveCount: raw.save_count ?? raw.saves_count ?? 0,
     likeCount: raw.like_count ?? raw.likes_count ?? raw.favorite_count ?? raw.favorites_count ?? 0,
   }
+}
+
+function makeMetaDescription(content) {
+  const plainText = String(content ?? '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/[>*_`~#]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return plainText.length > 160 ? `${plainText.slice(0, 157).trimEnd()}…` : plainText
+}
+
+function makeBlogStructuredData(blog) {
+  const origin = import.meta.env.VITE_SITE_URL?.replace(/\/+$/, '') || window.location.origin
+  const pageUrl = `${origin}/blogs/${encodeURIComponent(blog.id)}`
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    mainEntityOfPage: { '@type': 'WebPage', '@id': pageUrl },
+    headline: blog.title,
+    description: makeMetaDescription(blog.content),
+    datePublished: blog.publishedAt,
+    dateModified: blog.updatedAt,
+    inLanguage: 'tr-TR',
+    author: {
+      '@type': 'Person',
+      name: blog.author.username || 'Fitbook yazarı',
+      ...(blog.author.id ? { url: `${origin}/profile/${encodeURIComponent(blog.author.id)}` } : {}),
+    },
+    publisher: { '@type': 'Organization', name: 'Fitbook', url: origin },
+    ...(blog.category ? { articleSection: blog.category } : {}),
+    ...(blog.tags.length ? { keywords: blog.tags.join(', ') } : {}),
+    ...(blog.imageUrl ? { image: [new URL(blog.imageUrl, origin).href] } : {}),
+  }
+  return Object.fromEntries(Object.entries(data).filter(([, value]) => value != null))
 }
 
 function normalizeComment(raw) {
@@ -109,7 +148,6 @@ export default function BlogDetail() {
           } catch { /* silent fail */ }
         }
         setBlog(normalized)
-        document.title = `${normalized.title} | Blog`
       })
       .catch((err) => {
         if (cancelled) return
@@ -117,7 +155,7 @@ export default function BlogDetail() {
       })
       .finally(() => { if (!cancelled) setBlogLoading(false) })
 
-    return () => { cancelled = true; document.title = 'Blog | En Son Yazılar' }
+    return () => { cancelled = true }
   }, [id])
 
   // Check engagement states
@@ -285,6 +323,7 @@ export default function BlogDetail() {
   if (blogError) {
     return (
       <div className="page-container page-container--narrow">
+        <SEO title="Yazı bulunamadı" noindex />
         <Link to="/" className="back-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg></Link>
         <div className="auth-server-error" role="alert" style={{ marginTop: 16 }}>{blogError}</div>
       </div>
@@ -298,8 +337,11 @@ export default function BlogDetail() {
       {blog && (
         <SEO 
           title={blog.title}
-          description={blog.content.slice(0, 160).trim() + '…'}
+          description={makeMetaDescription(blog.content)}
           image={blog.imageUrl}
+          url={`/blogs/${encodeURIComponent(blog.id)}`}
+          type="article"
+          structuredData={makeBlogStructuredData(blog)}
         />
       )}
       <div className="detail-topbar">

@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import axiosInstance, { extractMessage } from '../api/axiosInstance';
 import { useAuth } from '../context/AuthContext';
+import AuthLayout from '../components/AuthLayout';
 
 // Simple regex — enough for client-side UX; the server performs real validation.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -111,8 +112,13 @@ export default function Login() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
+    <AuthLayout
+      variant="login"
+      seoTitle="Giriş Yap"
+      seoDescription="Fitbook hesabınıza giriş yapın."
+      welcomeTitle="Yeniden hoş geldin."
+      welcomeDescription="Takip ettiğin fikirlerle kaldığın yerden devam et."
+    >
         <div className="auth-header">
           <h1 className="auth-title">Hoş Geldiniz</h1>
           <p className="auth-subtitle">Hesabınıza giriş yapın</p>
@@ -171,7 +177,6 @@ export default function Login() {
             Kayıt Olun
           </Link>
         </p>
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

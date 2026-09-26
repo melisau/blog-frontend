@@ -23,6 +23,8 @@ import Library from './pages/Library'
 import Following from './pages/Following'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import About from './pages/About'
+import Footer from './components/Footer'
 
 export default function App() {
   return (
@@ -34,6 +36,7 @@ export default function App() {
           <Routes>
             {/* Public routes */}
             <Route path="/" element={<Home />} />
+            <Route path="/hakkinda" element={<About />} />
             <Route path="/blogs/:id" element={<BlogDetail />} />
             <Route path="/profile/:id" element={<Profile />} />
             <Route path="/profile/:id/following" element={<ProfileConnections />} />
@@ -54,6 +57,8 @@ export default function App() {
           </Routes>
         </main>
       </div>
+
+      <Footer />
 
       {/* Toast stack — outside <Routes> so it survives page transitions */}
       <ToastContainer />

@@ -79,6 +79,7 @@ export default function ProfileConnections() {
       <SEO
         title={`${title}${profileName ? ` - ${profileName}` : ''}`}
         description={`${title} listesini görüntüleyin.`}
+        noindex
       />
 
       <Link to={`/profile/${id}`} className="back-link" aria-label="Profile geri dön">

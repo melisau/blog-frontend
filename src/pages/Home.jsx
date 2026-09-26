@@ -14,6 +14,16 @@ function normalizeTagValue(value) {
   return String(value ?? '').trim().toLocaleLowerCase('tr')
 }
 
+const siteOrigin = import.meta.env.VITE_SITE_URL?.replace(/\/+$/, '') || window.location.origin
+const websiteStructuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'Fitbook',
+  alternateName: 'Fitbook Topluluk Blogu',
+  url: siteOrigin,
+  inLanguage: 'tr-TR',
+}
+
 // ── Page Component ───────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -175,9 +185,15 @@ export default function Home() {
 
   return (
     <div className="page-container">
-      <SEO 
-        title={activeCategory ? `${activeCategory} Kategorisi` : activeTag ? `#${activeTag} Etiketi` : 'Ana Sayfa'}
-        description="En son yazıları keşfedin ve topluluğumuza katılın."
+      <SEO
+        title={activeCategory ? `${activeCategory} yazıları` : activeTag ? `#${activeTag} etiketi` : query ? `“${query}” arama sonuçları` : 'Herkesin yazabildiği topluluk blogu'}
+        description={activeCategory
+          ? `${activeCategory} kategorisindeki topluluk yazılarını Fitbook'ta keşfedin.`
+          : activeTag
+            ? `Fitbook topluluğunda #${activeTag} etiketiyle paylaşılan yazıları keşfedin.`
+            : 'Fitbook’ta herkes yazı yayımlayabilir. Topluluktan yeni fikirleri keşfedin, yazarları takip edin ve sohbete katılın.'}
+        noindex={Boolean(query)}
+        structuredData={!activeCategory && !activeTag && !query ? websiteStructuredData : undefined}
       />
       {/* ── Filter Status ── */}
       {(activeCategory || activeTag || query) && (

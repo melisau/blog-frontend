@@ -55,7 +55,7 @@ export default function Library() {
 
   return (
     <div className="page-container">
-      <SEO title="Kütüphanem" description="Kaydettiğin blog yazıları." />
+      <SEO title="Kütüphanem" description="Kaydettiğin blog yazıları." noindex />
 
       <h1 className="library-title">Kütüphanem</h1>
 

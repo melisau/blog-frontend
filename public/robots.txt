@@ -1,6 +1,4 @@
 User-agent: *
 Allow: /
-Disallow: /edit-blog/
-Disallow: /new-blog/
 
 Sitemap: https://blog-projesi.vercel.app/sitemap.xml

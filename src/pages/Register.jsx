@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axiosInstance from '../api/axiosInstance';
+import AuthLayout from '../components/AuthLayout';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -116,8 +117,13 @@ export default function Register() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
+    <AuthLayout
+      variant="register"
+      seoTitle="Kayıt Ol"
+      seoDescription="Fitbook topluluğuna katılın ve yazılarınızı paylaşın."
+      welcomeTitle="Söz sende."
+      welcomeDescription="Aklındaki fikri yazıya dönüştür, topluluğunla paylaş ve yeni sesler keşfet."
+    >
         <div className="auth-header">
           <h1 className="auth-title">Hesap Oluştur</h1>
           <p className="auth-subtitle">Blogumuza katılın</p>
@@ -212,7 +218,6 @@ export default function Register() {
             Giriş Yapın
           </Link>
         </p>
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

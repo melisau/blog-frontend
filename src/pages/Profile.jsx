@@ -14,6 +14,7 @@ import BlogCardStats from '../components/BlogCardStats'
 import LoadingSpinner from '../components/LoadingSpinner'
 import AsyncState from '../components/AsyncState'
 import { normalizeBlogs } from '../services/blogMapper'
+import SEO from '../components/SEO'
 
 function toSafeCount(...values) {
   for (const value of values) {
@@ -355,6 +356,41 @@ export default function Profile() {
 
   return (
     <div className="page-container page-container--narrow">
+      {profileUser && (() => {
+        const siteOrigin = import.meta.env.VITE_SITE_URL?.replace(/\/+$/, '') || window.location.origin
+        const profileUrl = `${siteOrigin}/profile/${encodeURIComponent(profileUser.id)}`
+        const profileStructuredData = {
+          '@context': 'https://schema.org',
+          '@type': 'ProfilePage',
+          name: `${profileUser.username} — Fitbook yazar profili`,
+          url: profileUrl,
+          mainEntity: {
+            '@type': 'Person',
+            '@id': `${profileUrl}#person`,
+            name: profileUser.username,
+            ...(profileUser.bio ? { description: profileUser.bio } : {}),
+            identifier: String(profileUser.id),
+          },
+          ...(blogs.length ? {
+            hasPart: blogs.slice(0, 10).map((blog) => ({
+              '@type': 'BlogPosting',
+              headline: blog.title,
+              url: `${siteOrigin}/blogs/${encodeURIComponent(blog.id)}`,
+              author: { '@id': `${profileUrl}#person` },
+            })),
+          } : {}),
+        }
+
+        return (
+          <SEO
+            title={`${profileUser.username} — yazar profili`}
+            description={profileUser.bio || `${profileUser.username} adlı Fitbook yazarının yazılarını ve topluluk profilini keşfedin.`}
+            url={`/profile/${encodeURIComponent(profileUser.id)}`}
+            noindex={isOwnProfile || editMode || blogs.length === 0}
+            structuredData={profileStructuredData}
+          />
+        )
+      })()}
       <Link to="/" className="back-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg></Link>
 
       {/* ── User info card ─────────────────────────────────────────────── */}
