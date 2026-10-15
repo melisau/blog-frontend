@@ -31,11 +31,6 @@ export default function AuthLayout({
         </div>
 
         <div className="auth-art" aria-hidden="true">
-          <span className="auth-art__orb auth-art__orb--large" />
-          <span className="auth-art__orb auth-art__orb--small" />
-          <span className="auth-art__ring" />
-          <span className="auth-art__spark auth-art__spark--one">✳</span>
-          <span className="auth-art__spark auth-art__spark--two">✳</span>
           <span className="auth-art__note">Merak et.<br />Yaz. Paylaş.</span>
           <span className="auth-art__topic">Teknoloji · Yaşam · Daha fazlası</span>
         </div>

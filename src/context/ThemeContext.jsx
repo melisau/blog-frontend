@@ -14,6 +14,7 @@ function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme)
   // Keep the browser's color-scheme hint in sync so native UI (scrollbars, inputs) follow.
   document.documentElement.style.colorScheme = theme
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#1d171a' : '#fcf8f5')
 }
 
 export function ThemeProvider({ children }) {

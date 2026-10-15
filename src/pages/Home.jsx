@@ -211,6 +211,11 @@ export default function Home() {
 
       <div className="home-layout">
         <div className="home-content">
+          <h1 className="home-title">
+            {activeCategory ? `${activeCategory} yazıları`
+              : activeTag ? `#${activeTag} yazıları`
+                : query ? 'Arama sonuçları' : 'Topluluktan yeni fikirler'}
+          </h1>
           {/* ── Content ── */}
           {loading ? (
             <div className="blog-grid">

@@ -23,7 +23,7 @@ export default function BlogCard({
       onClick={() => navigate(`/blogs/${blog.id}`)}
       role="link"
       tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && navigate(`/blogs/${blog.id}`)}
+      onKeyDown={(e) => e.target === e.currentTarget && e.key === 'Enter' && navigate(`/blogs/${blog.id}`)}
     >
       {isAuthenticated && (
         <>
@@ -56,10 +56,7 @@ export default function BlogCard({
         </>
       )}
 
-      {blog.imageUrl && (
-        <img src={blog.imageUrl} alt={blog.title} className="blog-card__thumb" />
-      )}
-      <div className="blog-card__body">
+      <div className="blog-card__header">
         {blog.author && (
           <div className="blog-card__author-row">
             <Avatar
@@ -81,6 +78,12 @@ export default function BlogCard({
             )}
           </div>
         )}
+        <span className="blog-card__date">{blog.date}</span>
+      </div>
+      {blog.imageUrl && (
+        <img src={blog.imageUrl} alt={blog.title} className="blog-card__thumb" loading="lazy" />
+      )}
+      <div className="blog-card__body">
 
         <h2 className="blog-card__title">{blog.title}</h2>
         <p className="blog-card__excerpt">{blog.excerpt}</p>
@@ -111,9 +114,8 @@ export default function BlogCard({
 
         <div className="blog-card__footer">
           <BlogCardStats likeCount={blog.likeCount ?? 0} commentCount={blog.commentCount ?? 0} />
-          <span className="blog-card__date">{blog.date}</span>
+          <span className="blog-card__read">Devamını Oku →</span>
         </div>
-        <span className="blog-card__read">Devamını Oku →</span>
       </div>
     </article>
   )

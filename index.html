@@ -5,7 +5,9 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Fitbook’ta herkes yazı yayımlayabilir. Topluluktan yeni fikirleri keşfedin, yazarları takip edin ve sohbete katılın." />
-    <meta name="theme-color" content="#2563eb" />
+    <meta name="theme-color" content="#fcf8f5" />
+    <link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/lora-latin.woff2" as="font" type="font/woff2" crossorigin />
     <script>
       (function () {
         try {
@@ -15,6 +17,7 @@
             : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
           document.documentElement.setAttribute('data-theme', theme)
           document.documentElement.style.colorScheme = theme
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', theme === 'dark' ? '#1d171a' : '#fcf8f5')
         } catch (_) {
           document.documentElement.setAttribute('data-theme', 'light')
           document.documentElement.style.colorScheme = 'light'

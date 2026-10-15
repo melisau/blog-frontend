@@ -50,10 +50,10 @@ export default function Sidebar() {
     : '/login'
 
   const items = [
-    { label: 'Home',      path: '/',          icon: <HomeIcon />,     end: true  },
-    { label: 'Library',   path: '/library',   icon: <LibraryIcon />,  end: false },
-    { label: 'Profile',   path: profilePath,  icon: <ProfileIcon />,  end: false },
-    { label: 'Following', path: '/following', icon: <FollowingIcon />, end: false },
+    { label: 'Ana sayfa',        path: '/',          icon: <HomeIcon />,      end: true  },
+    { label: 'Kitaplığım',       path: '/library',   icon: <LibraryIcon />,   end: false },
+    { label: 'Profilim',         path: profilePath,  icon: <ProfileIcon />,   end: false },
+    { label: 'Takip ettiklerim', path: '/following', icon: <FollowingIcon />, end: false },
   ]
 
   useEffect(() => {
